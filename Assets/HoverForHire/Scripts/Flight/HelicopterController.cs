@@ -34,6 +34,7 @@ namespace HoverForHire
 
         public event Action CrashedEvent;
         public event Action<float> Touchdown;
+        public event Action<AircraftImpact> Impact;
         public event Action ResetPerformed;
 
         private readonly HashSet<Collider> supports = new HashSet<Collider>();
@@ -146,11 +147,13 @@ namespace HoverForHire
             if (Tuning == null || Body == null) return;
             bool supported = false;
             float normalImpact = 0f;
+            Vector3 impactPoint = Body.position, impactNormal = Vector3.up;
             for (int i = 0; i < collision.contactCount; i++)
             {
                 ContactPoint contact = collision.GetContact(i);
                 supported |= Vector3.Dot(contact.normal, Vector3.up) >= Tuning.GroundNormalThreshold;
-                normalImpact = Mathf.Max(normalImpact, Mathf.Abs(Vector3.Dot(collision.relativeVelocity, contact.normal)));
+                float speed = Mathf.Abs(Vector3.Dot(collision.relativeVelocity, contact.normal));
+                if (speed >= normalImpact) { normalImpact = speed; impactPoint = contact.point; impactNormal = contact.normal; }
             }
 
             bool previouslySupported = supports.Count > 0;
@@ -164,6 +167,10 @@ namespace HoverForHire
                 LastTouchdownSpeed = Mathf.Max(0f, -prePhysicsVelocity.y, -collision.relativeVelocity.y);
                 Touchdown?.Invoke(LastTouchdownSpeed);
             }
+
+            if (entering || newTouchdown)
+                Impact?.Invoke(new AircraftImpact(impactPoint, impactNormal, prePhysicsVelocity,
+                    Mathf.Max(normalImpact, newTouchdown ? LastTouchdownSpeed : 0), Body.mass));
 
             if (Crashed) return;
             bool hardLanding = newTouchdown && LastTouchdownSpeed > Tuning.CrashVerticalSpeed;

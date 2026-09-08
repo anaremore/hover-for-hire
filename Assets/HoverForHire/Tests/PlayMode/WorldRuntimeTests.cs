@@ -43,7 +43,15 @@ namespace HoverForHire.Tests
             if (world != null) Object.DestroyImmediate(world);
             if (tuning != null) Object.DestroyImmediate(tuning);
             if (terrainMesh != null) Object.DestroyImmediate(terrainMesh);
-            foreach (Material material in materials) if (material != null) Object.DestroyImmediate(material);
+            foreach (Material material in materials)
+            {
+                if (material == null) continue;
+#if UNITY_EDITOR
+                // TextMesh signs share Unity's font asset material; this fixture owns only runtime palettes.
+                if (UnityEditor.EditorUtility.IsPersistent(material)) continue;
+#endif
+                Object.DestroyImmediate(material);
+            }
             materials.Clear();
             Physics.simulationMode = oldSimulation;
             Time.fixedDeltaTime = oldFixedDelta;

@@ -255,5 +255,49 @@ namespace HoverForHire.Tests
             Assert.That(controller.Crashed, Is.False);
             Assert.That(crashEvents, Is.EqualTo(1));
         }
+
+        [Test]
+        public void CollisionPresentationReceivesIncomingImpactAndRecoveryClearsTransientEffects()
+        {
+            HelicopterController controller = Create(height: 12f);
+            float strongest = 0;
+            controller.Impact += impact => strongest = Mathf.Max(strongest, impact.Speed);
+            Step(170);
+            Assert.That(controller.Crashed, Is.True);
+            Assert.That(strongest, Is.GreaterThan(controller.Tuning.CrashVerticalSpeed));
+            Assert.That(controller.Body.linearVelocity.magnitude, Is.LessThan(strongest), "Impact data must preserve the incoming speed after collision resolution.");
+
+            var door = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            door.name = "Cabin door right";
+            door.transform.SetParent(controller.transform, false);
+            Object.DestroyImmediate(door.GetComponent<Collider>());
+            Renderer visibleDoor = door.GetComponent<Renderer>();
+            var originalPaint = new MaterialPropertyBlock();
+            originalPaint.SetColor("_BaseColor", new Color(.22f, .44f, .66f, 1));
+            visibleDoor.SetPropertyBlock(originalPaint);
+            var effects = controller.gameObject.AddComponent<AircraftEffects>();
+            effects.Initialize(controller, null);
+            effects.PresentImpact(new AircraftImpact(controller.transform.position, Vector3.up, Vector3.down * 3, 3, 1000));
+            Assert.That(effects.HasExploded, Is.False);
+            Assert.That(visibleDoor.enabled, Is.True);
+            effects.ResetEffects();
+            effects.PresentImpact(new AircraftImpact(controller.transform.position, Vector3.up, Vector3.down * 25, 25, 1000));
+            Assert.That(effects.HasExploded, Is.True);
+            Assert.That(effects.ActiveDebrisCount, Is.EqualTo(1));
+            Assert.That(visibleDoor.enabled, Is.False);
+            Assert.That(effects.EffectParticleCount, Is.GreaterThan(0));
+            var scorchedPaint = new MaterialPropertyBlock();
+            visibleDoor.GetPropertyBlock(scorchedPaint);
+            Assert.That(scorchedPaint.GetColor("_BaseColor").r, Is.LessThan(.15f));
+
+            controller.ResetAt(new Vector3(10000f, 1.55f, 10000f), Quaternion.identity);
+            Assert.That(effects.HasExploded, Is.False);
+            Assert.That(effects.ActiveDebrisCount, Is.Zero);
+            Assert.That(effects.EffectParticleCount, Is.Zero);
+            Assert.That(visibleDoor.enabled, Is.True);
+            visibleDoor.GetPropertyBlock(scorchedPaint);
+            Assert.That(scorchedPaint.GetColor("_BaseColor"), Is.EqualTo(originalPaint.GetColor("_BaseColor")));
+            Assert.That(controller.Crashed, Is.False);
+        }
     }
 }

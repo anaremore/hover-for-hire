@@ -22,6 +22,8 @@ if ($Task -in @('EditMode','PlayMode')) {
     $arguments += @('-executeMethod', ('HoverForHire.Editor.ProjectSetup.' + $method), '-quit')
     if ($Task -eq 'Prepare') { $arguments += '-nographics' }
 }
-$process = Start-Process -FilePath $Editor -ArgumentList $arguments -WindowStyle Hidden -PassThru -Wait
+$process = Start-Process -FilePath $Editor -ArgumentList $arguments -WindowStyle Hidden -PassThru
+# Wait for the editor itself; shader/compiler service descendants can outlive a failed import.
+$process.WaitForExit()
 if ($process.ExitCode -ne 0) { throw "Unity exited with $($process.ExitCode). See Artifacts/$Task.log." }
 Write-Host "$Task completed. See $artifacts."

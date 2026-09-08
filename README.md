@@ -4,16 +4,16 @@ A single-player helicopter delivery game and computer control practice sandbox. 
 
 ![Flight over Port Meridian](Docs/Screenshots/flight.png)
 
-Verified on 8 September 2026: **81 automated tests passed**, all three desktop players built, and Windows scripted flights passed at 30/60/144 FPS. Native macOS/Linux playtesting remains outstanding.
+Version **0.2.0**, verified on 8 September 2026: **89 automated tests passed**, with Windows flight/effects and 16:9/ultrawide visual checks. Native macOS/Linux playtesting remains outstanding. [Download desktop builds](https://github.com/anaremore/hover-for-hire/releases/tag/v0.2.0) · [Release notes](Docs/Release-0.2.0.md).
 
 ## Quick start
 
-1. Open this folder in **Unity 6000.3.22f1 (Unity 6.3 LTS)**. Install the Windows, macOS, or Linux **Mono** build support module for your desired player.
+1. When cloning the source, install Git LFS and run `git lfs pull` to fetch the helicopter and textures. Open this folder in **Unity 6000.3.22f1 (Unity 6.3 LTS)**. Install the Windows, macOS, or Linux **Mono** build support module for your desired player.
 2. Let Unity import packages. Open `Assets/HoverForHire/Scenes/PortMeridian.unity` and press Play. You start at home base in Free Flight, with the rotor governed and collective at zero.
 3. Raise collective gently with **Left Shift**. Empty hover is around **45%**; loaded hover needs more. Use mouse or WASD cyclic, Q/E yaw, and Left Ctrl to lower collective. Brake early with aft cyclic, then reduce collective after touchdown.
 4. **Escape** opens the flight desk. Choose a training drill or a 15-minute delivery shift. **Enter** accepts the offered contract. Land and remain level and still for the service dwell; loading/unloading is automatic.
 
-If setup assets ever need regeneration, use **Hover for Hire → Prepare project**. The generated scene, tuning asset, renderer, URP settings, and input configuration are committed. No external art, sound, paid plugins, account login, or runtime downloads are needed to play.
+If setup assets ever need regeneration, use **Hover for Hire → Prepare project**. The scene, tuning asset, renderer, URP settings, input configuration, helicopter FBX and textures are committed. No paid plugins, account login, Blender installation, or runtime downloads are needed to play.
 
 ## What is implemented
 
@@ -22,7 +22,10 @@ If setup assets ever need regeneration, use **Hover for Hire → Prepare project
 - Rebindable keyboard/mouse, gamepad, and absolute collective binding. Persistent collective, two mouse cyclic modes, free look hold/return options, saved bindings and preferences.
 - Chase and cockpit cameras with free look, smoothing, collision handling, and recentering.
 - Free Flight, seven training drills, passenger and internal cargo deliveries, stable loading/unloading, comfort/condition/landing/time scores, optional harder contracts, progression, and duplicate payout prevention.
-- Ten pads across town, docks, industrial yard, rooftop clinic, hills and remote sites; procedural scenery, helicopter, rotor/wind/landing/service audio; HUD, map, and telemetry overlay.
+- Ten pads across a detailed coastal town, airport, ferry harbor, industrial yard, rooftop clinic, orchard, hills and remote sites; mixed forests, marked roads, boats and shoreline scenery.
+- Original modeled utility helicopter, live cockpit gauges, smooth painted/alloy/glass materials, textured terrain, animated water, cloud sky, soft shadows and film grading.
+- Transparent flight HUD, terrain minimap, compact cockpit readouts and a redesigned Flight Desk.
+- Surface-aware landing rotor wash, dust, sparks, smoke, water spray, graded crash debris, high-energy explosions and camera shake. Reset restores aircraft parts and clears effects.
 
 ## Controls
 
@@ -49,6 +52,8 @@ Use **Hover for Hire → Build → Windows / macOS / Linux**. Development builds
 
 Ready-to-extract archives are generated locally as `Builds/Hover-for-Hire-Windows.zip`, `Builds/Hover-for-Hire-macOS.zip`, and `Builds/Hover-for-Hire-Linux.zip`. Run `python Tools/package_builds.py` after rebuilding to regenerate them and their SHA-256 files. It preserves executable modes for macOS/Linux. Keep each player's data folders beside its executable.
 
+Completed pushed updates ship these three archives and their SHA-256 checksums as versioned [GitHub releases](https://github.com/anaremore/hover-for-hire/releases). Builds stay out of source history. Release notes identify verification and native-platform limitations.
+
 PowerShell helper (close the editor for this project first):
 
 ```powershell
@@ -74,7 +79,7 @@ See [validation results and playtest checklist](Docs/Validation.md), [flight-mod
 
 ## Limits of this slice
 
-The flight model is deliberately simplified. Rotor RPM is governed; lift scales with collective and is tilted with the aircraft/disc. There is no wind simulation, ground effect, translational lift, autorotation, vortex-ring state, blade flapping, engine failures, or hover hold yet. Those remain deferred until the basic model has player feedback. Cockpit instruments use the shared screen HUD. Scenery, rotor audio, and aircraft art are functional procedural assets.
+The flight model is deliberately simplified. Rotor RPM is governed; lift scales with collective and is tilted with the aircraft/disc. There is no wind simulation, ground effect, translational lift, autorotation, vortex-ring state, blade flapping, engine failures, or hover hold yet. Those remain deferred until the basic model has player feedback. Rotor wash and broken parts are visual effects; they do not add hidden flight forces. Crash severity varies visually, while the existing crash/recovery rules remain intact. See [art direction, asset sources and effects](Docs/Art.md).
 
 The project is a game and practice aid, not a certified aviation simulator. Automated checks establish invariants and detect regressions; they cannot establish that the helicopter feels satisfying. Native macOS/Linux controller, display, and audio checks require those machines.
 

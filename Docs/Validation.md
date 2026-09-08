@@ -2,7 +2,21 @@
 
 Status snapshot: **8 September 2026, Unity 6000.3.22f1**. The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
 
-## Recorded checks
+## Graphics and effects release (0.2.0)
+
+The updated source passed **62 EditMode tests** at **15:55:43 UTC** and **27 PlayMode tests** at **16:03:14 UTC**, with no failures. New coverage checks impact thresholds, water suppression, incoming collision data, debris/particle cleanup, and restoration of scorched paint. All ten production pads still pass their geometry and actual-aircraft touchdown checks. The world fixture now excludes persistent font materials from teardown rather than trying to destroy Unity assets.
+
+The final Windows graphics sequence at **1600×900** passed takeoff, forward flight, cockpit/chase switching, all Flight Desk pages, and grounded reset without errors or crashes. A separate **1680×720** run verified ultrawide HUD/menu alignment and passed the same flight sequence. The 1600×900 run measured **58.51 average FPS** at a 60 FPS cap, **54.420 m** peak skid AGL and **3.392 m/s** peak horizontal speed on the available RTX 3080 host. This short scripted run is not a general hardware benchmark. Runtime diagnostics confirmed post-processing enabled and ACES active.
+
+The optional art tour captures fixed aircraft, town, harbor, highland and coastal viewpoints after saving the physics result. Its effect diagnostics then inject graded presentation events: a 7 m/s hit does not explode, a 25 m/s dry hit explodes and detaches parts, reset restores the aircraft, and a 30 m/s water impact does not explode. All four assertions passed with zero recorded errors. This screenshot tour is distinct from the real-collision PlayMode regression, and does not claim to be a flown landing/crash sequence.
+
+Visual review corrected cockpit framing, mirrored/oversized world lettering, transparent sign depth behavior, overly dark sky fill, foliage shape/density, water aliasing/fog interpolation, and HUD rotation under screen scaling. Final captures are in `Docs/Screenshots`; detailed local evidence is in `Artifacts/release-smoke`, `Artifacts/ultrawide-smoke`, and `Artifacts/distribution-smoke`.
+
+All three final desktop builds succeeded without shader or C# compilation errors. Archive CRCs and SHA-256 hashes passed; macOS universal and Linux x64 binary headers and executable permissions were verified. The archives are 72.7 MiB (Windows), 113.3 MiB (macOS), and 73.7 MiB (Linux).
+
+The desktop players are development builds. Windows is runtime-verified here. macOS universal and Linux x64 are cross-builds, with native display/input/audio/saving checks and macOS distribution signing still outstanding.
+
+## Earlier flight baseline (0.1.0)
 
 | Check | Observed result | Evidence / limit |
 | --- | --- | --- |
@@ -24,7 +38,7 @@ The earlier device-test failures came from input-event routing in an unfocused b
 
 The smoke pilot supplies timed bounded control commands to the actual Rigidbody; it does not teleport during flight. Its explicit reset is tested separately. The sequence tests takeoff, a short forward maneuver, camera switches and reset, not a flown delivery route. Mission integration tests deliberately relocate between pads to isolate loading/scoring/state behavior. Complete routes with human keyboard/mouse and physical gamepad control remain on the checklist below.
 
-The rendered views were inspected for aircraft/pad visibility, cockpit sightline, HUD contrast, and menu layout at 1280×720. This caught and corrected pad surface flicker, default primitive pad collision, cyclic-indicator overlap and footer contrast. The cockpit currently uses the shared HUD for essential instruments. Screenshot examples are in `Docs/Screenshots`.
+The baseline views were inspected at 1280×720. That pass corrected pad surface flicker, default primitive pad collision, cyclic-indicator overlap and footer contrast. Version 0.2 replaces that presentation with the modeled cockpit and new HUD described above.
 
 ## Acceptance matrix
 
