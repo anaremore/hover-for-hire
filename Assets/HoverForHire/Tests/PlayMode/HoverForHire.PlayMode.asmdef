@@ -1,0 +1,5 @@
+{
+  "name": "HoverForHire.PlayMode",
+  "references": ["HoverForHire.Runtime", "Unity.InputSystem", "Unity.RenderPipelines.Universal.Runtime"],
+  "optionalUnityReferences": ["TestAssemblies"]
+}

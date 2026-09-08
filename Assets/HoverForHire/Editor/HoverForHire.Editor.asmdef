@@ -1,0 +1,6 @@
+{
+  "name": "HoverForHire.Editor",
+  "rootNamespace": "HoverForHire.Editor",
+  "references": ["HoverForHire.Runtime", "Unity.InputSystem", "Unity.RenderPipelines.Universal.Runtime", "Unity.RenderPipelines.Core.Runtime"],
+  "includePlatforms": ["Editor"]
+}

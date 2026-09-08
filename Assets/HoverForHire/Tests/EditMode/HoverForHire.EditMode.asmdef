@@ -1,0 +1,6 @@
+{
+  "name": "HoverForHire.EditMode",
+  "references": ["HoverForHire.Runtime", "Unity.InputSystem"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"]
+}

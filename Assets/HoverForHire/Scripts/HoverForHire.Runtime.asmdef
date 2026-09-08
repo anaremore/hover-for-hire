@@ -1,0 +1,5 @@
+{
+  "name": "HoverForHire.Runtime",
+  "rootNamespace": "HoverForHire",
+  "references": ["Unity.InputSystem", "Unity.RenderPipelines.Universal.Runtime", "Unity.RenderPipelines.Core.Runtime"]
+}
