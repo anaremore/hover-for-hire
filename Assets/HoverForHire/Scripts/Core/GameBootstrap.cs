@@ -28,6 +28,10 @@ namespace HoverForHire
             var audio=go.AddComponent<FlightAudio>();audio.Aircraft=Aircraft;
             var hud=gameObject.AddComponent<FlightHUD>();hud.Game=this;hud.Audio=audio;
         }
+        void FixedUpdate()
+        {
+            if(Aircraft!=null && !Aircraft.Crashed && Aircraft.Body.position.y < -5f) Aircraft.ReportCrash();
+        }
         void OnDestroy(){if(Instance==this)Instance=null;Time.timeScale=1;Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
     }
 }

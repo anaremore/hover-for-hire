@@ -78,6 +78,8 @@ namespace HoverForHire.Tests
             go.SetActive(true);
             controller.SetPayload(payload);
             controller.Body.sleepThreshold = 0f;
+            // These accelerated steps have no rendering loop to interpolate Transform poses.
+            controller.Body.interpolation = RigidbodyInterpolation.None;
             aircraft.Add(controller);
             Physics.SyncTransforms();
             return controller;

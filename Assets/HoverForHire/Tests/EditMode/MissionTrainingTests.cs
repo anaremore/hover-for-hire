@@ -78,7 +78,7 @@ namespace HoverForHire.Tests
             session.RecordTouchdown(2f);
             session.Tick(1f, new FlightSample { Y = 1.5f, Grounded = true });
             Assert.That(session.State, Is.EqualTo(TrainingState.Failed));
-            Assert.That(session.Feedback, Does.Contain("Reduce").IgnoreCase.Or.Contain("reduce"));
+            Assert.That(session.Feedback, Does.Contain("reduce"));
             Assert.That(session.TryClaimResult(out _), Is.False);
         }
     }

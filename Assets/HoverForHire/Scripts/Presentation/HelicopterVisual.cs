@@ -13,6 +13,9 @@ namespace HoverForHire
             Part("Utility cabin",PrimitiveType.Sphere,new Vector3(0,.1f,.25f),new Vector3(2.35f,2.15f,3.65f),IslandWorld.Signal);
             Part("Forward canopy",PrimitiveType.Sphere,new Vector3(0,.35f,1.2f),new Vector3(2.15f,1.65f,2.1f),IslandWorld.Glass);
             Part("Canopy center frame",PrimitiveType.Cube,new Vector3(0,.7f,1.9f),new Vector3(.08f,1.1f,.1f),IslandWorld.White);
+            Part("Cockpit dashboard",PrimitiveType.Cube,new Vector3(0,-.13f,2.33f),new Vector3(1.85f,.25f,.55f),IslandWorld.Metal);
+            foreach(float side in new[]{-.9f,.9f}) Part("Windshield pillar",PrimitiveType.Cube,new Vector3(side,.7f,2.14f),new Vector3(.065f,1.3f,.065f),IslandWorld.Metal);
+            Part("Windshield header",PrimitiveType.Cube,new Vector3(0,1.32f,2.14f),new Vector3(1.85f,.065f,.065f),IslandWorld.Metal);
             Part("Engine housing",PrimitiveType.Capsule,new Vector3(0,1.12f,-.6f),new Vector3(1.25f,1.35f,1.9f),IslandWorld.White).transform.localRotation=Quaternion.Euler(90,0,0);
             Part("Tail boom",PrimitiveType.Capsule,new Vector3(0,.35f,-3.25f),new Vector3(.5f,2.45f,.5f),IslandWorld.Signal).transform.localRotation=Quaternion.Euler(90,0,0);
             Part("Tail fin",PrimitiveType.Cube,new Vector3(0,1,-5.15f),new Vector3(.12f,1.8f,1),IslandWorld.White);

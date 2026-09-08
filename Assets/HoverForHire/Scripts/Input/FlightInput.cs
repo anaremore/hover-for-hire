@@ -11,6 +11,8 @@ namespace HoverForHire
         public const string PreferencesKey = "HoverForHire.Controls.v1";
         public const string BindingsKey = "HoverForHire.Bindings.v1";
         public InputPreferences Settings = new InputPreferences();
+        /// <summary>Set false before Awake for isolated test/replay rigs that must not touch local preferences.</summary>
+        public bool PersistenceEnabled { get; set; } = true;
         public PilotCommand Command { get; private set; }
         public bool IsPaused { get; private set; }
         public bool IsFreeLooking { get; private set; }
@@ -52,7 +54,7 @@ namespace HoverForHire
             _yawLeft = _map["YawLeft"]; _yawRight = _map["YawRight"];
             _increase = _map["CollectiveIncrease"]; _decrease = _map["CollectiveDecrease"];
             _absolute = _map["AbsoluteCollective"];
-            LoadSettings();
+            if (PersistenceEnabled) LoadSettings();
             Command = new PilotCommand(Vector2.zero, 0f, 0f);
         }
 
@@ -70,6 +72,8 @@ namespace HoverForHire
         private void OnApplicationFocus(bool focused)
         {
             _skipMouseFrame = true;
+            CameraLookDelta = MenuMove = Vector2.zero;
+            MenuSubmitPressed = MenuBackPressed = false;
             if (!focused && !IsPaused)
             {
                 PauseRequested?.Invoke();
@@ -77,12 +81,19 @@ namespace HoverForHire
             }
         }
 
-        private void Update()
+        private void Update() => SampleFrame(Time.deltaTime);
+
+        /// <summary>Sample the action state once per render/input frame; exposed for deterministic device replay.</summary>
+        public void SampleFrame(float deltaSeconds)
         {
             CameraLookDelta = Vector2.zero;
             MenuMove = Vector2.zero;
             MenuSubmitPressed = MenuBackPressed = false;
-            if (IsRebinding) return;
+            if (IsRebinding)
+            {
+                if (_map["MenuBack"].WasPressedThisFrame()) CancelRebind();
+                return;
+            }
             if (_map["Pause"].WasPressedThisFrame()) PauseRequested?.Invoke();
             if (IsPaused)
             {
@@ -91,7 +102,12 @@ namespace HoverForHire
                 MenuBackPressed = _map["MenuBack"].WasPressedThisFrame();
                 return;
             }
-            if (_map["Reset"].WasPressedThisFrame()) ResetRequested?.Invoke();
+            if (_map["Reset"].WasPressedThisFrame())
+            {
+                ResetCommand();
+                ResetRequested?.Invoke();
+                return; // Held controls cannot immediately undo the neutral reset in this frame.
+            }
             if (_map["SwitchCamera"].WasPressedThisFrame()) CameraRequested?.Invoke();
             if (_map["RecenterView"].WasPressedThisFrame()) RecenterRequested?.Invoke();
             if (_map["Interact"].WasPressedThisFrame()) InteractRequested?.Invoke();
@@ -100,7 +116,7 @@ namespace HoverForHire
             if (_map["HoverHold"].WasPressedThisFrame()) HoverRequested?.Invoke();
             if (_map["RecenterCyclic"].WasPressedThisFrame()) RecenterCyclic();
 
-            float dt = Time.deltaTime;
+            float dt = Mathf.Max(0f, deltaSeconds);
             Vector2 mouseDelta = _mouse.ReadValue<Vector2>();
             bool freeLook = _freeLook.IsPressed();
             // Discard the release frame and every cursor-lock transition. There is no queued mouse state.
@@ -159,6 +175,7 @@ namespace HoverForHire
         public void SaveSettings()
         {
             Settings.Sanitize();
+            if (!PersistenceEnabled) return;
             PlayerPrefs.SetString(PreferencesKey, JsonUtility.ToJson(Settings));
             PlayerPrefs.SetString(BindingsKey, SerializeBindingOverrides(_asset));
             PlayerPrefs.Save();
@@ -204,11 +221,20 @@ namespace HoverForHire
                 .WithCancelingThrough("<Keyboard>/escape")
                 .WithControlsExcluding("<Pointer>/position")
                 .OnMatchWaitForAnother(0.12f)
+                .OnPotentialMatch(operation =>
+                {
+                    bool cancel = false;
+                    if (action.name != "MenuBack")
+                        foreach (InputControl control in _map["MenuBack"].controls)
+                            if (operation.selectedControl == control) cancel = true;
+                    if (cancel) operation.Cancel(); else operation.Complete();
+                })
                 .OnCancel(operation => FinishRebind(operation, false, completed))
                 .OnComplete(operation => FinishRebind(operation, true, completed));
             if (action.name != "MouseCyclic") _rebind.WithControlsExcluding("<Pointer>/delta");
             if (action.bindings[bindingIndex].isPartOfComposite) _rebind.WithExpectedControlType("Button");
             _rebind.Start();
+            if (action.name != "MenuBack") _map["MenuBack"].Enable();
         }
 
         private void FinishRebind(InputActionRebindingExtensions.RebindingOperation operation, bool success, Action<bool> completed)

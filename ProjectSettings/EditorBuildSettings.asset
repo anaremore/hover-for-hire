@@ -4,6 +4,9 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/HoverForHire/Scenes/PortMeridian.unity
+    guid: 4b84f852db631ae48be520412c7bb726
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

@@ -14,21 +14,21 @@ namespace HoverForHire
         public Rigidbody Body;
         public AssistSettings Assists = new AssistSettings();
 
-        public bool Grounded => supports.Count > 0 && transform.up.y > 0.4f;
+        public bool Grounded => supports.Count > 0 && (Body == null ? transform.up : Body.rotation * Vector3.up).y > 0.4f;
         public bool Crashed { get; private set; }
         /// <summary>Vertical clearance beneath the fuselage origin, less upright skid clearance.</summary>
         public float AltitudeAGL { get; private set; }
         public float GroundSpeed => Body == null ? 0f : Vector3.ProjectOnPlane(Body.linearVelocity, Vector3.up).magnitude;
         public float Airspeed => Body == null ? 0f : Body.linearVelocity.magnitude; // Calm atmosphere in this slice.
         public float VerticalSpeed => Body == null ? 0f : Body.linearVelocity.y;
-        public float Heading => transform.eulerAngles.y;
+        public float Heading => Body == null ? transform.eulerAngles.y : Body.rotation.eulerAngles.y;
         public float LiftNewtons { get; private set; }
         public float PayloadKg { get; private set; }
         public float LastTouchdownSpeed { get; private set; }
         public PilotCommand RawCommand { get; private set; }
         public PilotCommand AssistedCommand { get; private set; }
         public Vector3 LocalAngularRatesDegrees => Body == null ? Vector3.zero :
-            transform.InverseTransformDirection(Body.angularVelocity) * Mathf.Rad2Deg;
+            Quaternion.Inverse(Body.rotation) * Body.angularVelocity * Mathf.Rad2Deg;
         public float RotorSpeed01 { get; private set; } = 1f;
         public float RotorRpm => RotorSpeed01 * (Tuning == null ? 395f : Tuning.GovernedRotorRpm);
 
@@ -95,22 +95,25 @@ namespace HoverForHire
             float dt = Time.fixedDeltaTime;
             prePhysicsVelocity = Body.linearVelocity;
             RawCommand = !Crashed && InputSource is IFlightInput input ? input.Command.Clamped() : PilotCommand.Neutral;
-            Vector3 localAngular = transform.InverseTransformDirection(Body.angularVelocity);
+            // The interpolated Transform is for rendering. Forces read the current physics pose.
+            Quaternion rotation = Body.rotation;
+            Quaternion inverseRotation = Quaternion.Inverse(rotation);
+            Vector3 localAngular = inverseRotation * Body.angularVelocity;
             float rotorReactionNm = LiftNewtons * Mathf.Max(0f, Tuning.RotorTorqueArmMeters);
-            AssistedCommand = solver.Step(RawCommand, localAngular, transform.InverseTransformDirection(Vector3.up),
+            AssistedCommand = solver.Step(RawCommand, localAngular, inverseRotation * Vector3.up,
                 rotorReactionNm, Tuning, Assists, dt);
             RotorSpeed01 = Mathf.MoveTowards(RotorSpeed01, Crashed ? 0f : 1f, dt * (Crashed ? 0.35f : 1f));
             LiftNewtons = FlightMath.Lift(AssistedCommand.Collective, Tuning) * RotorSpeed01 * RotorSpeed01;
 
             Vector3 localThrust = FlightMath.LocalThrustDirection(AssistedCommand.Cyclic, Tuning.RotorDiskTiltDegrees);
-            Body.AddForce(transform.TransformDirection(localThrust) * LiftNewtons, ForceMode.Force);
+            Body.AddForce(rotation * localThrust * LiftNewtons, ForceMode.Force);
             float authority = RotorSpeed01 * RotorSpeed01;
             Vector3 controlTorque = new Vector3(AssistedCommand.Cyclic.y * Tuning.PitchTorqueNm,
                 AssistedCommand.Yaw * Tuning.YawTorqueNm, -AssistedCommand.Cyclic.x * Tuning.RollTorqueNm) * authority;
             controlTorque.y += LiftNewtons * Mathf.Max(0f, Tuning.RotorTorqueArmMeters);
             Body.AddRelativeTorque(controlTorque, ForceMode.Force);
 
-            Vector3 localVelocity = transform.InverseTransformDirection(Body.linearVelocity);
+            Vector3 localVelocity = inverseRotation * Body.linearVelocity;
             Body.AddRelativeForce(FlightMath.AerodynamicDrag(localVelocity, Tuning.LinearDrag, Tuning.QuadraticDrag), ForceMode.Force);
             Body.AddRelativeTorque(FlightMath.AerodynamicDrag(localAngular, Tuning.AngularDrag, Vector3.zero), ForceMode.Force);
         }
@@ -121,7 +124,7 @@ namespace HoverForHire
         {
             // Ignore the aircraft's colliders and triggers; a roof is valid ground beneath the aircraft.
             const float rayOriginOffset = 0.2f;
-            Vector3 origin = transform.position + Vector3.up * rayOriginOffset;
+            Vector3 origin = (Body == null ? transform.position : Body.position) + Vector3.up * rayOriginOffset;
             float length = Mathf.Max(1f, Tuning.AltitudeRayLengthMeters);
             int count = Physics.RaycastNonAlloc(origin, Vector3.down, altitudeHits, length, ~0, QueryTriggerInteraction.Ignore);
             float closest = length;
@@ -164,7 +167,7 @@ namespace HoverForHire
 
             if (Crashed) return;
             bool hardLanding = newTouchdown && LastTouchdownSpeed > Tuning.CrashVerticalSpeed;
-            bool tipOver = supported && Vector3.Angle(transform.up, Vector3.up) > Tuning.MaximumLandingTiltDegrees;
+            bool tipOver = supported && Vector3.Angle(Body.rotation * Vector3.up, Vector3.up) > Tuning.MaximumLandingTiltDegrees;
             bool obstacleImpact = entering && normalImpact > Tuning.CrashImpactSpeed;
             if (hardLanding || tipOver || obstacleImpact) ReportCrash();
         }

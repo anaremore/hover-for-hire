@@ -77,7 +77,14 @@ namespace HoverForHire
             {
                 if (!File.Exists(path)) return null;
                 if (new FileInfo(path).Length > 8 * 1024 * 1024) { LastError = "Save exceeded the supported size."; return null; }
-                ProgressionData data = JsonUtility.FromJson<ProgressionData>(File.ReadAllText(path));
+                string json = File.ReadAllText(path);
+                // JsonUtility can create defaults from an empty object; that is not a valid save.
+                if (!json.Contains("\"Version\"") || !json.Contains("\"AppliedAttemptIds\"") || !json.Contains("\"Results\""))
+                {
+                    LastError = "Save was incomplete or used an unsupported version.";
+                    return null;
+                }
+                ProgressionData data = JsonUtility.FromJson<ProgressionData>(json);
                 if (data != null && data.IsValid) return data;
                 LastError = "Save was incomplete or used an unsupported version.";
             }

@@ -30,8 +30,8 @@ namespace HoverForHire
             for (int i=0;i<sites.Length;i++)
             {
                 var p = sites[i]; float radius = i == 0 ? 17 : i == 4 ? 9 : i > 5 ? 10 : 14;
-                if(i==4) Piece("Clinic tower",PrimitiveType.Cube,new Vector3(p.x,22,p.z),new Vector3(34,42,34),White);
-                else Piece("Landing foundation",PrimitiveType.Cube,p-Vector3.up*.7f,new Vector3(radius*2+6,1.4f,radius*2+6),Stone);
+                if(i==4) Piece("Clinic tower",PrimitiveType.Cube,new Vector3(p.x,21.85f,p.z),new Vector3(34,41.7f,34),White);
+                else Piece("Landing foundation",PrimitiveType.Cube,p-Vector3.up*.85f,new Vector3(radius*2+6,1.4f,radius*2+6),Stone);
                 var pad = Piece(names[i],PrimitiveType.Cylinder,p-Vector3.up*.12f,new Vector3(radius*2,.12f,radius*2),Asphalt);
                 var zoneObject = new GameObject(names[i]+" zone"); zoneObject.transform.SetParent(root); zoneObject.transform.position=p;
                 var zone = zoneObject.AddComponent<LandingZone>(); zone.Id="pad-"+i; zone.DisplayName=names[i]; zone.Radius=radius; zones[i]=zone;
@@ -101,7 +101,15 @@ namespace HoverForHire
         public static GameObject Piece(string name,PrimitiveType type,Vector3 position,Vector3 scale,Material material,bool collision=true,Transform parent=null)
         {
             var go=GameObject.CreatePrimitive(type);go.name=name;go.transform.SetParent(parent!=null?parent:root,false);go.transform.localPosition=position;go.transform.localScale=scale;go.GetComponent<Renderer>().sharedMaterial=material;
-            if(!collision){var c=go.GetComponent<Collider>();c.enabled=false;Object.Destroy(c);}return go;
+            if(!collision){var c=go.GetComponent<Collider>();c.enabled=false;Object.Destroy(c);}
+            else if(type==PrimitiveType.Cylinder)
+            {
+                // Unity gives primitive cylinders capsule colliders. A wide, thin helipad would
+                // otherwise create a tall rounded obstacle; collide against the actual static mesh.
+                var capsule=go.GetComponent<Collider>();capsule.enabled=false;Object.Destroy(capsule);
+                go.AddComponent<MeshCollider>().sharedMesh=go.GetComponent<MeshFilter>().sharedMesh;
+            }
+            return go;
         }
     }
 }

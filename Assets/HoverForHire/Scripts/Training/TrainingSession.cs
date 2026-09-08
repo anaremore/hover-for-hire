@@ -78,7 +78,9 @@ namespace HoverForHire
             if (ElapsedSeconds > 300f) { Fail("Drill paused after 5 minutes. Retry and focus on the displayed target."); return; }
             PositionError = home.HorizontalDistance(sample);
             HeadingError = Math.Abs(DeltaAngle(sample.Heading, targetHeading));
-            float altitude = sample.Y - home.Y;
+            float bodyHeight = sample.Y - home.Y;
+            // Match the modeled 1.5 m origin-to-skid clearance and the HUD's skid AGL units.
+            float altitude = bodyHeight - 1.5f;
             if (!sample.Grounded && altitude > 3f && Index <= 2)
             {
                 measuredSeconds += dt;
@@ -147,14 +149,14 @@ namespace HoverForHire
                     if (Stage == 0 && !sample.Grounded && PositionError >= departure && altitude >= minimumHeight)
                     {
                         Stage = 1;
-                        SetTarget(0f, 1.5f);
+                        SetTarget(0f, 0f);
                         Objective = Index == 5 ? "Return to the pad. Touch down below 1.8 m/s, then remain stable for 3 seconds."
                             : "Land within 2.5 m of pad center, below 1 m/s descent. Hold stable for 3 seconds.";
                     }
                     required = 3f;
                     float radius = Index == 5 ? Math.Min(home.Radius, 8f) : 2.5f;
                     float maxImpact = Index == 5 ? 1.8f : 1f;
-                    stable = Stage == 1 && sample.Grounded && altitude >= 0.2f && altitude <= 3.2f
+                    stable = Stage == 1 && sample.Grounded && bodyHeight >= 0.2f && bodyHeight <= 3.2f
                         && PositionError <= radius && sample.GroundSpeed <= 0.6f && Math.Abs(sample.VerticalSpeed) <= 0.4f
                         && sample.TiltDegrees <= 7f && TouchdownSpeed <= maxImpact;
                     if (Stage == 1 && sample.Grounded && TouchdownSpeed > maxImpact)
@@ -225,7 +227,7 @@ namespace HoverForHire
         private void SetTarget(float distance, float height)
         {
             TargetX = home.X + forwardX * distance;
-            TargetY = home.Y + height;
+            TargetY = home.Y + height + 1.5f;
             TargetZ = home.Z + forwardZ * distance;
         }
 

@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c54741c8d39493a4aa4a628b0fb474df, type: 3}
+  m_Name: UtilityHelicopter
+  m_EditorClassIdentifier: HoverForHire.Runtime::HoverForHire.FlightTuning
+  EmptyMassKg: 1050
+  MaximumPayloadKg: 450
+  CenterOfMass: {x: 0, y: -0.3, z: 0}
+  MaximumLiftNewtons: 23000
+  CollectiveResponseSeconds: 0.35
+  RotorDiskTiltDegrees: 3
+  RotorTorqueArmMeters: 0.045
+  GovernedRotorRpm: 395
+  PitchTorqueNm: 2900
+  RollTorqueNm: 2400
+  YawTorqueNm: 3500
+  MaximumCyclicRateDegrees: 34
+  MaximumYawRateDegrees: 48
+  RateFeedbackGain: 2.2
+  YawFeedbackGain: 2.3
+  ControlResponseSeconds: 0.12
+  AssistBlendSeconds: 0.55
+  LevelAngleForFullCommand: 24
+  LevelCyclicThreshold: 0.22
+  LevelAuthority: 0.6
+  LinearDrag: {x: 34, y: 72, z: 12}
+  QuadraticDrag: {x: 5.5, y: 9, z: 1.7}
+  AngularDrag: {x: 180, y: 230, z: 190}
+  SkidClearanceMeters: 1.5
+  AltitudeRayLengthMeters: 3000
+  GroundNormalThreshold: 0.65
+  CrashVerticalSpeed: 5.5
+  CrashImpactSpeed: 8
+  MaximumLandingTiltDegrees: 65

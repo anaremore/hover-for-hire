@@ -10,6 +10,8 @@ namespace HoverForHire
     {
         public HelicopterController Aircraft;
         public LandingZone[] Zones;
+        [Tooltip("Optional alternate local save path, set before Awake. Empty uses the normal per-user progression file.")]
+        public string ProgressionPathOverride;
         [Min(60f)] public float ShiftDurationSeconds = 900f;
         public string AssistSnapshot = "";
         public GameMode Mode { get; private set; } = GameMode.FreeFlight;
@@ -43,7 +45,7 @@ namespace HoverForHire
         private ProgressionStore store;
         private HelicopterController boundAircraft;
         private Vector3 lastVelocity;
-        private bool hasVelocity, suppressReset, modeStarted;
+        private bool hasVelocity, suppressReset, modeStarted, savePending;
         private int nextContract;
         private float shiftScoreTotal;
 
@@ -116,7 +118,8 @@ namespace HoverForHire
 
         private void Awake()
         {
-            store = new ProgressionStore(Path.Combine(Application.persistentDataPath, "progression.json"));
+            store = new ProgressionStore(string.IsNullOrWhiteSpace(ProgressionPathOverride)
+                ? Path.Combine(Application.persistentDataPath, "progression.json") : ProgressionPathOverride);
             Progression = store.Load();
             if (store.RecoveredBackup) SaveWarning = "Recovered progression from the previous save.";
             else if (!string.IsNullOrEmpty(store.LastError)) SaveWarning = "Progression could not be loaded: " + store.LastError;
@@ -206,6 +209,13 @@ namespace HoverForHire
             if (Mode != GameMode.DeliveryShift || ShiftFinished) return;
             if (CurrentMission == null || CurrentMission.State == HoverForHire.MissionState.Delivered) OfferNextJob();
             if (CurrentMission != null && CurrentMission.Accept(ActiveAssists())) FeedbackEvent?.Invoke("Job accepted · " + CurrentMission.Contract.Title);
+        }
+
+        public void BrowseNextJob()
+        {
+            if (Mode != GameMode.DeliveryShift || ShiftFinished) return;
+            if (CurrentMission == null || CurrentMission.State == HoverForHire.MissionState.Available
+                || CurrentMission.State == HoverForHire.MissionState.Delivered) OfferNextJob();
         }
 
         public void Interact()
@@ -316,15 +326,25 @@ namespace HoverForHire
                 DeliveriesThisShift++;
                 shiftScoreTotal += result.Score;
             }
-            if (store != null && !store.Save(Progression))
+            savePending = true;
+            SaveProgression();
+            FeedbackEvent?.Invoke(result.Mode == "Training" ? "Drill complete · grade " + result.Grade : $"Delivered · +${result.Payout} · grade {result.Grade}");
+            ResultRecorded?.Invoke(result);
+        }
+
+        private void SaveProgression()
+        {
+            if (!savePending || store == null || Progression == null) return;
+            if (!store.Save(Progression))
             {
                 SaveWarning = "Progress is held for this session but could not be saved: " + store.LastError;
                 Debug.LogWarning(SaveWarning);
             }
-            else SaveWarning = "";
-            FeedbackEvent?.Invoke(result.Mode == "Training" ? "Drill complete · grade " + result.Grade : $"Delivered · +${result.Payout} · grade {result.Grade}");
-            ResultRecorded?.Invoke(result);
+            else { SaveWarning = ""; savePending = false; }
         }
+
+        private void OnApplicationPause(bool paused) { if (paused) SaveProgression(); }
+        private void OnApplicationQuit() => SaveProgression();
 
         private void OfferNextJob()
         {

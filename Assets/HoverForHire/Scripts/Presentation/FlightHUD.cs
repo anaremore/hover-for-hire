@@ -11,7 +11,9 @@ namespace HoverForHire
         bool paused,debug; int page,preset; Vector2 scroll;
         GUIStyle title,label,small,value,button,panel;
         Texture2D white; string notice="Welcome to Port Meridian. Raise collective gently to lift off.";
-        float noticeUntil=12; int previousDeliveries;
+        float noticeUntil=12;
+        int menuFocus,menuCount,menuIndex,menuAdjust; bool menuActivate,menuScrollToFocus,insideMenuScroll;
+        Vector2Int menuDirection; float menuRepeatAt;
         const float Width=1280,Height=720;
         HelicopterController Aircraft=>Game.Aircraft;
         FlightInput Input=>Game.Input;
@@ -20,21 +22,26 @@ namespace HoverForHire
         {
             Input.PauseRequested+=TogglePause;Input.ResetRequested+=Retry;Input.InteractRequested+=Interact;Input.DebugRequested+=ToggleDebug;Input.AssistRequested+=CycleAssists;Input.HoverRequested+=HoverNotice;
             Aircraft.ResetPerformed+=ResetInput;
+            Missions.FeedbackEvent+=MissionFeedback;
             try { if(PlayerPrefs.HasKey("hfh.assists"))JsonUtility.FromJsonOverwrite(PlayerPrefs.GetString("hfh.assists"),Aircraft.Assists); }catch(Exception){ }
             Audio.Volume=PlayerPrefs.GetFloat("hfh.volume",.65f);
-            Missions.StartFreeFlight();previousDeliveries=Missions.CompletedDeliveries;
+            Missions.StartFreeFlight();
         }
-        void ResetInput()=>Input.ResetCommand();
+        void ResetInput(){Input.ResetCommand();Game.CameraRig.SnapToTarget();}
         void Update()
         {
-            Missions.AssistSnapshot=Aircraft.Assists.Summary;
-            if(Missions.CompletedDeliveries>previousDeliveries){Audio.ServiceChime();previousDeliveries=Missions.CompletedDeliveries;}
+            UpdateMenuNavigation();
+        }
+        void MissionFeedback(string message)
+        {
+            notice=message;noticeUntil=Time.unscaledTime+6;
+            if(message.StartsWith("Loaded",StringComparison.Ordinal)||message.StartsWith("Delivered",StringComparison.Ordinal)||message.StartsWith("Drill complete",StringComparison.Ordinal))Audio.ServiceChime();
         }
         void ToggleDebug()=>debug=!debug;
         void HoverNotice(){notice="Hover hold is deferred. Use rate / level assist and practice a steady collective.";noticeUntil=Time.unscaledTime+6;}
         void CycleAssists(){preset=(preset+1)%3;Aircraft.SetPreset((AssistPreset)preset);Save();}
         void TogglePause()=>SetPause(!paused);
-        void SetPause(bool state){paused=state;Input.SetPaused(state);Time.timeScale=state?0:1;if(!state)Save();}
+        void SetPause(bool state){paused=state;Input.SetPaused(state);Time.timeScale=state?0:1;menuActivate=false;menuAdjust=0;menuDirection=Vector2Int.zero;if(!state)Save();}
         void Retry(){Missions.Retry();Input.ResetCommand();notice="Reset complete. Collective is at 0%.";noticeUntil=Time.unscaledTime+4;}
         void Interact(){if(!paused)Missions.Interact();}
         void Save(){Input.SaveSettings();PlayerPrefs.SetString("hfh.assists",JsonUtility.ToJson(Aircraft.Assists));PlayerPrefs.SetFloat("hfh.volume",Audio.Volume);PlayerPrefs.Save();}
@@ -55,6 +62,7 @@ namespace HoverForHire
             DrawMap(); DrawInstruments(); DrawTarget();
             GUI.Label(new Rect(28,Height-31,1000,24),"ESC  Menu     V  Camera     ALT / MMB  Look     C  Center cyclic     BACKSPACE  Retry     ENTER  Job     F1  Telemetry",small);
             if(Time.unscaledTime<noticeUntil){Box(new Rect(330,490,620,54),.88f);GUI.Label(new Rect(347,501,586,40),notice,small);}
+            if(!string.IsNullOrEmpty(Missions.SaveWarning)){Box(new Rect(330,530,620,38),.95f);GUI.Label(new Rect(342,534,596,31),Missions.SaveWarning,small);}
             if(Aircraft.Crashed){Box(new Rect(390,255,500,180),.97f);GUI.Label(new Rect(416,279,450,38),"AIRCRAFT RECOVERY",title);GUI.Label(new Rect(416,323,450,44),"Flight ended. Reset at the pad and try a slower approach.",label);if(GUI.Button(new Rect(416,377,450,40),"Retry  /  Backspace",button))Retry();}
             if(debug)DrawDebug();
             if(paused)DrawMenu();
@@ -70,8 +78,8 @@ namespace HoverForHire
             GUI.Label(new Rect(875,641,340,20),Aircraft.Grounded?"GROUNDED  /  AGL ray beneath skids":"AIRBORNE  /  AGL ray beneath skids",small);
             if(Input.Settings.ShowCyclicIndicator || Input.Settings.MouseMode==MouseCyclicMode.VirtualJoystick)
             {
-                var r=new Rect(599,420,82,82);Box(r,.5f);Bar(new Rect(r.x+40,r.y,1,82),1,new Color(.8f,.9f,.9f,.3f));Bar(new Rect(r.x,r.y+40,82,1),1,new Color(.8f,.9f,.9f,.3f));
-                Vector2 c=Input.Command.Cyclic;Bar(new Rect(r.center.x+c.x*36-4,r.center.y-c.y*36-4,8,8),1,IslandWorld.Orange);GUI.Label(new Rect(600,505,120,20),Input.IsFreeLooking?"FREE LOOK":"CYCLIC",small);
+                var r=new Rect(1127,444,82,82);Box(r,.8f);Bar(new Rect(r.x+40,r.y,1,82),1,new Color(.8f,.9f,.9f,.3f));Bar(new Rect(r.x,r.y+40,82,1),1,new Color(.8f,.9f,.9f,.3f));
+                Vector2 c=Input.Command.Cyclic;Bar(new Rect(r.center.x+c.x*36-4,r.center.y-c.y*36-4,8,8),1,IslandWorld.Orange);GUI.Label(new Rect(r.x,r.y+85,120,20),Input.IsFreeLooking?"FREE LOOK":"CYCLIC",small);
             }
         }
         void Instrument(float x,string caption,float number,string unit){GUI.Label(new Rect(x,581,156,21),caption,small);GUI.Label(new Rect(x,610,155,36),$"{number:0.0} <size=14>{unit}</size>",value);}
@@ -85,9 +93,9 @@ namespace HoverForHire
         static string TimeText(float seconds)=>$"{Mathf.FloorToInt(Mathf.Max(0,seconds)/60):00}:{Mathf.FloorToInt(Mathf.Max(0,seconds)%60):00}";
         void DrawTarget()
         {
-            var zone=Missions.TargetZone;if(zone==null)return;var cam=Camera.main;if(cam==null)return;var world=zone.transform.position+Vector3.up*3;var point=cam.WorldToViewportPoint(world);
+            var zone=Missions.TargetZone;if(zone==null&&Missions.Mode!=GameMode.Training)return;var cam=Camera.main;if(cam==null)return;var world=zone!=null?zone.transform.position+Vector3.up*3:Missions.ObjectivePosition;var point=cam.WorldToViewportPoint(world);
             float x=Mathf.Clamp(point.x*Width,100,Width-240),y=Mathf.Clamp((1-point.y)*Height,230,390);if(point.z<0){x=Width/2;y=240;}
-            Box(new Rect(x-90,y,220,56),.85f);GUI.Label(new Rect(x-80,y+5,200,23),zone.DisplayName,small);GUI.Label(new Rect(x-80,y+28,200,23),$"{Vector3.Distance(Aircraft.transform.position,world):0} m  {(point.z<0?"BEHIND":"")}",small);
+            Box(new Rect(x-90,y,220,56),.85f);GUI.Label(new Rect(x-80,y+5,200,23),zone!=null?zone.DisplayName:"TRAINING TARGET",small);GUI.Label(new Rect(x-80,y+28,200,23),$"{Vector3.Distance(Aircraft.transform.position,world):0} m  {(point.z<0?"BEHIND":"")}",small);
             if(Missions.DwellProgress>0)Bar(new Rect(x-90,y+54,220,4),Missions.DwellProgress,IslandWorld.Orange);
         }
         void DrawDebug()
@@ -97,41 +105,50 @@ namespace HoverForHire
         }
         void DrawMenu()
         {
+            menuIndex=0;
             Box(new Rect(0,0,Width,Height),.77f);Box(new Rect(190,35,900,650),.99f);
-            GUI.Label(new Rect(217,55,600,40),"FLIGHT DESK",title);GUI.Label(new Rect(217,96,750,25),"Paused · settings save when you resume",small);
+            GUI.Label(new Rect(217,55,600,40),"FLIGHT DESK",title);GUI.Label(new Rect(217,96,850,25),"Paused · D-pad / stick: navigate · Left/right: adjust · A: select · B: resume",small);
             GUILayout.BeginArea(new Rect(215,132,850,515));
-            page=GUILayout.Toolbar(page,new[]{"Fly","Controls","Bindings","Camera / assists"},button);GUILayout.Space(10);
-            scroll=GUILayout.BeginScrollView(scroll);
+            int selectedPage=MenuToolbar(page,new[]{"Fly","Controls","Bindings","Camera / assists"});
+            if(selectedPage!=page){page=selectedPage;scroll=Vector2.zero;menuFocus=0;}
+            GUILayout.Space(10);scroll=GUILayout.BeginScrollView(scroll);insideMenuScroll=true;
             if(page==0)ModeMenu();else if(page==1)ControlMenu();else if(page==2)BindingMenu();else CameraMenu();
-            GUILayout.EndScrollView();GUILayout.Space(7);if(GUILayout.Button("Resume flight  /  Escape",button))SetPause(false);GUILayout.EndArea();
+            insideMenuScroll=false;GUILayout.EndScrollView();GUILayout.Space(7);if(MenuButton("Resume flight  /  Escape"))SetPause(false);GUILayout.EndArea();
+            menuCount=menuIndex;menuFocus=Mathf.Clamp(menuFocus,0,Mathf.Max(0,menuCount-1));
+            if(Event.current.type==EventType.Layout){menuActivate=false;menuAdjust=0;}
         }
         void ModeMenu()
         {
             GUILayout.Label("A compact island. One helicopter. Room to get better.",label);
-            GUILayout.BeginHorizontal();if(GUILayout.Button("Free flight",button)){Missions.StartFreeFlight();Input.ResetCommand();SetPause(false);}if(GUILayout.Button("Start 15-minute shift",button)){Missions.StartShift();Input.ResetCommand();SetPause(false);}GUILayout.EndHorizontal();
-            if(GUILayout.Button("Accept next contract / continue service",button)){Missions.Interact();SetPause(false);}
+            GUILayout.BeginHorizontal();if(MenuButton("Free flight")){Missions.StartFreeFlight();Input.ResetCommand();SetPause(false);}if(MenuButton("Start 15-minute shift")){Missions.StartShift();Input.ResetCommand();SetPause(false);}GUILayout.EndHorizontal();
+            if(MenuButton("Accept next contract / continue service")){Missions.Interact();SetPause(false);}
+            if(Missions.Mode==GameMode.DeliveryShift&&!Missions.ShiftFinished&&(Missions.MissionState==MissionState.Available||Missions.MissionState==MissionState.Delivered))
+            {
+                GUILayout.Label(Missions.CurrentObjective,label);
+                if(MenuButton("Browse next offer"))Missions.BrowseNextJob();
+            }
             GUILayout.Space(10);GUILayout.Label("TRAINING  /  one skill at a time",label);
             string[] drills={"01 Takeoff","02 Hover","03 Yaw control","04 Forward flight","05 Braking","06 Approach","07 Precision landing"};
-            for(int i=0;i<drills.Length;i++){if(i%2==0)GUILayout.BeginHorizontal();if(GUILayout.Button(drills[i],button)){Missions.StartTraining(i);Input.ResetCommand();SetPause(false);}if(i%2==1||i==drills.Length-1)GUILayout.EndHorizontal();}
-            GUILayout.Space(6);if(GUILayout.Button("Reset at helipad / retry current job",button)){Retry();SetPause(false);}
+            for(int i=0;i<drills.Length;i++){if(i%2==0)GUILayout.BeginHorizontal();if(MenuButton(drills[i])){Missions.StartTraining(i);Input.ResetCommand();SetPause(false);}if(i%2==1||i==drills.Length-1)GUILayout.EndHorizontal();}
+            GUILayout.Space(6);if(MenuButton("Reset at helipad / retry current job")){Retry();SetPause(false);}
             GUILayout.Label("Raise collective gradually. Around 45% is empty hover power. Tilt forward to accelerate; tilt back early to brake. Lower collective after touchdown.",small);
-            if(GUILayout.Button("Quit game",button)){Save();Application.Quit();}
+            if(MenuButton("Quit game")){Save();Application.Quit();}
         }
         void ControlMenu()
         {
             var s=Input.Settings;GUILayout.Label("Mouse cyclic · keyboard adds smoothly, combined command is bounded",label);
-            s.MouseMode=(MouseCyclicMode)GUILayout.Toolbar((int)s.MouseMode,new[]{"Relative + return","Virtual joystick"},button);
+            s.MouseMode=(MouseCyclicMode)MenuToolbar((int)s.MouseMode,new[]{"Relative + return","Virtual joystick"});
             Slider("Mouse sensitivity",ref s.MouseSensitivity,.0005f,.02f,"F4");Slider("Return toward center / s",ref s.MouseReturnRate,0,8);Slider("Deadzone",ref s.Deadzone,0,.4f);Slider("Response curve",ref s.ResponseCurve,.5f,3);
-            s.InvertPitch=GUILayout.Toggle(s.InvertPitch,"Invert cyclic pitch");s.InvertRoll=GUILayout.Toggle(s.InvertRoll,"Invert cyclic roll");Slider("Keyboard response",ref s.KeyboardResponse,2,30);Slider("Collective change / s",ref s.CollectiveRate,.05f,1);
-            GUILayout.Label("Cyclic while holding free look",label);s.FreeLookBehavior=(FreeLookCyclicMode)GUILayout.Toolbar((int)s.FreeLookBehavior,new[]{"Hold command","Return to neutral"},button);
-            s.ShowCyclicIndicator=GUILayout.Toggle(s.ShowCyclicIndicator,"Show cyclic indicator");s.UseAbsoluteCollective=GUILayout.Toggle(s.UseAbsoluteCollective,"Use absolute collective axis (bind below first)");s.AbsoluteAxisSigned=GUILayout.Toggle(s.AbsoluteAxisSigned,"Absolute axis range is -1 to +1");s.InvertAbsoluteCollective=GUILayout.Toggle(s.InvertAbsoluteCollective,"Invert absolute collective");
+            s.InvertPitch=MenuToggle(s.InvertPitch,"Invert cyclic pitch");s.InvertRoll=MenuToggle(s.InvertRoll,"Invert cyclic roll");Slider("Keyboard response",ref s.KeyboardResponse,2,30);Slider("Collective change / s",ref s.CollectiveRate,.05f,1);
+            GUILayout.Label("Cyclic while holding free look",label);s.FreeLookBehavior=(FreeLookCyclicMode)MenuToolbar((int)s.FreeLookBehavior,new[]{"Hold command","Return to neutral"});
+            s.ShowCyclicIndicator=MenuToggle(s.ShowCyclicIndicator,"Show cyclic indicator");s.UseAbsoluteCollective=MenuToggle(s.UseAbsoluteCollective,"Use absolute collective axis (bind below first)");s.AbsoluteAxisSigned=MenuToggle(s.AbsoluteAxisSigned,"Absolute axis range is -1 to +1");s.InvertAbsoluteCollective=MenuToggle(s.InvertAbsoluteCollective,"Invert absolute collective");
             GUILayout.Label("MMB duplicates Alt free look on systems that intercept Alt. C recenters cyclic; R recenters only the view. Bindings can be changed on the next tab.",small);
-            if(GUILayout.Button("Restore control defaults",button))Input.RestoreDefaults();
+            if(MenuButton("Restore control defaults"))Input.RestoreDefaults();
         }
         void BindingMenu()
         {
-            GUILayout.Label(Input.IsRebinding?"Move or press a control. Escape cancels.":"Choose a binding, then press a key, button, or move an axis.",label);
-            if(Input.IsRebinding&&GUILayout.Button("Cancel binding",button))Input.CancelRebind();
+            GUILayout.Label(Input.IsRebinding?"Move or press a control. Escape / menu Back cancels.":"Choose a binding, then press a key, button, or move an axis.",label);
+            GUI.enabled=Input.IsRebinding;if(MenuButton("Cancel binding"))Input.CancelRebind();GUI.enabled=true;
             foreach(var action in Input.Actions)
             {
                 GUILayout.Space(6);GUILayout.Label(action.name,label);
@@ -139,7 +156,7 @@ namespace HoverForHire
                 {
                     var binding=action.bindings[i];if(binding.isComposite)continue;int index=i;var id=action.id;
                     GUI.enabled=!Input.IsRebinding;
-                    if(GUILayout.Button((binding.isPartOfComposite?binding.name+": ":"")+action.GetBindingDisplayString(i),button))Input.BeginRebind(id,index,_=>Save());
+                    if(MenuButton((binding.isPartOfComposite?binding.name+": ":"")+action.GetBindingDisplayString(i)))Input.BeginRebind(id,index,_=>Save());
                     GUI.enabled=true;
                 }
             }
@@ -147,13 +164,68 @@ namespace HoverForHire
         void CameraMenu()
         {
             GUILayout.Label("Flight assists · same aircraft, bounded control commands",label);
-            GUILayout.BeginHorizontal();foreach(AssistPreset p in Enum.GetValues(typeof(AssistPreset)))if(GUILayout.Button(p.ToString(),button)){preset=(int)p;Aircraft.SetPreset(p);}GUILayout.EndHorizontal();
-            var a=Aircraft.Assists;a.RateStabilization=GUILayout.Toggle(a.RateStabilization,"Pitch / roll rate stabilization");a.AutoLevel=GUILayout.Toggle(a.AutoLevel,"Auto-level with centered cyclic");a.YawStabilization=GUILayout.Toggle(a.YawStabilization,"Yaw stabilization");a.TorqueCompensation=GUILayout.Toggle(a.TorqueCompensation,"Main rotor torque compensation");
+            GUILayout.BeginHorizontal();foreach(AssistPreset p in Enum.GetValues(typeof(AssistPreset)))if(MenuButton(p.ToString())){preset=(int)p;Aircraft.SetPreset(p);}GUILayout.EndHorizontal();
+            var a=Aircraft.Assists;a.RateStabilization=MenuToggle(a.RateStabilization,"Pitch / roll rate stabilization");a.AutoLevel=MenuToggle(a.AutoLevel,"Auto-level with centered cyclic");a.YawStabilization=MenuToggle(a.YawStabilization,"Yaw stabilization");a.TorqueCompensation=MenuToggle(a.TorqueCompensation,"Main rotor torque compensation");
             GUILayout.Label("Hover hold is deferred pending flight tuning. Level assist does not stop drift or hold altitude.",small);
             var s=Input.Settings;Slider("Camera distance / m",ref s.CameraDistance,5,25);Slider("Camera height / m",ref s.CameraHeight,1,10);Slider("Field of view / deg",ref s.CameraFov,45,100);Slider("Camera smoothing / s",ref s.CameraSmoothing,.02f,.8f);Slider("Look sensitivity",ref s.LookSensitivity,.02f,.5f);Slider("Gamepad look / deg/s",ref s.GamepadLookSpeed,30,240);
-            s.InvertLook=GUILayout.Toggle(s.InvertLook,"Invert camera look");s.AutoRecenterView=GUILayout.Toggle(s.AutoRecenterView,"Automatically recenter view");Slider("Recenter delay / s",ref s.RecenterDelay,0,5);Slider("Recenter speed",ref s.RecenterSpeed,1,12);Slider("Audio volume",ref Audio.Volume,0,1);
+            s.InvertLook=MenuToggle(s.InvertLook,"Invert camera look");s.AutoRecenterView=MenuToggle(s.AutoRecenterView,"Automatically recenter view");Slider("Recenter delay / s",ref s.RecenterDelay,0,5);Slider("Recenter speed",ref s.RecenterSpeed,1,12);Slider("Audio volume",ref Audio.Volume,0,1);
         }
-        void Slider(string caption,ref float number,float min,float max,string format="F2") { GUILayout.Label(caption+"   "+number.ToString(format),small);number=GUILayout.HorizontalSlider(number,min,max);GUILayout.Space(5); }
-        void OnDestroy(){if(Game==null||Game.Input==null)return;Input.PauseRequested-=TogglePause;Input.ResetRequested-=Retry;Input.InteractRequested-=Interact;Input.DebugRequested-=ToggleDebug;Input.AssistRequested-=CycleAssists;Input.HoverRequested-=HoverNotice;if(Aircraft!=null)Aircraft.ResetPerformed-=ResetInput;}
+        void UpdateMenuNavigation()
+        {
+            if(!paused||Input.IsRebinding)return;
+            if(Input.MenuBackPressed){SetPause(false);return;}
+            if(Input.MenuSubmitPressed)menuActivate=true;
+            Vector2 move=Input.MenuMove;
+            Vector2Int direction=Mathf.Abs(move.y)>.5f?new Vector2Int(0,move.y>0?-1:1):Mathf.Abs(move.x)>.5f?new Vector2Int(move.x>0?1:-1,0):Vector2Int.zero;
+            if(direction==Vector2Int.zero){menuDirection=direction;return;}
+            bool changed=direction!=menuDirection;
+            if(changed||Time.unscaledTime>=menuRepeatAt)
+            {
+                if(direction.y!=0&&menuCount>0){menuFocus=(menuFocus+direction.y+menuCount)%menuCount;menuScrollToFocus=true;}
+                if(direction.x!=0)menuAdjust=direction.x;
+                menuRepeatAt=Time.unscaledTime+(changed ? .38f : .12f);
+            }
+            menuDirection=direction;
+        }
+        Color MenuHighlight(int id)
+        {
+            Color previous=GUI.backgroundColor;
+            if(id==menuFocus)GUI.backgroundColor=new Color(1f,.64f,.32f);
+            return previous;
+        }
+        bool MenuActivate(int id)=>id==menuFocus&&menuActivate&&GUI.enabled&&Event.current.type==EventType.Layout;
+        int MenuAdjustment(int id)=>id==menuFocus&&GUI.enabled&&Event.current.type==EventType.Layout?menuAdjust:0;
+        void TrackMenuControl(int id)
+        {
+            if(id!=menuFocus||!insideMenuScroll||!menuScrollToFocus||Event.current.type!=EventType.Repaint)return;
+            Rect rect=GUILayoutUtility.GetLastRect();
+            if(rect.yMin<scroll.y)scroll.y=Mathf.Max(0,rect.yMin-15);
+            else if(rect.yMax>scroll.y+360)scroll.y=rect.yMax-345;
+            menuScrollToFocus=false;
+        }
+        bool MenuButton(string text)
+        {
+            int id=menuIndex++;Color color=MenuHighlight(id);bool clicked=GUILayout.Button(text,button);GUI.backgroundColor=color;TrackMenuControl(id);
+            bool activate=MenuActivate(id);if(activate)menuActivate=false;return clicked||activate;
+        }
+        bool MenuToggle(bool state,string text)
+        {
+            int id=menuIndex++;Color color=MenuHighlight(id);bool result=GUILayout.Toggle(state,(id==menuFocus?"› ":"")+text);GUI.backgroundColor=color;TrackMenuControl(id);
+            if(MenuActivate(id)){menuActivate=false;result=!result;}else if(MenuAdjustment(id)!=0)result=menuAdjust>0;
+            return result;
+        }
+        int MenuToolbar(int selected,string[] options)
+        {
+            int id=menuIndex++;Color color=MenuHighlight(id);int result=GUILayout.Toolbar(selected,options,button);GUI.backgroundColor=color;TrackMenuControl(id);
+            int adjust=MenuAdjustment(id);if(MenuActivate(id)){menuActivate=false;adjust=1;}
+            if(adjust!=0)result=(result+adjust+options.Length)%options.Length;return result;
+        }
+        void Slider(string caption,ref float number,float min,float max,string format="F2")
+        {
+            int id=menuIndex++;GUILayout.Label((id==menuFocus?"› ":"")+caption+"   "+number.ToString(format),small);Color color=MenuHighlight(id);
+            number=GUILayout.HorizontalSlider(number,min,max);GUI.backgroundColor=color;TrackMenuControl(id);
+            number=Mathf.Clamp(number+MenuAdjustment(id)*(max-min)/40f,min,max);GUILayout.Space(5);
+        }
+        void OnDestroy(){if(Game==null||Game.Input==null)return;Input.PauseRequested-=TogglePause;Input.ResetRequested-=Retry;Input.InteractRequested-=Interact;Input.DebugRequested-=ToggleDebug;Input.AssistRequested-=CycleAssists;Input.HoverRequested-=HoverNotice;if(Aircraft!=null)Aircraft.ResetPerformed-=ResetInput;if(Game.Missions!=null)Missions.FeedbackEvent-=MissionFeedback;}
     }
 }
