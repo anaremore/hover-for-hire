@@ -17,7 +17,7 @@ Pause menus support the gamepad without a mouse: D-pad or left stick up/down mov
 | Reset at helipad | Backspace | Select / View |
 | Accept / interact | Enter | South face button (A / Cross) |
 | Cycle assist preset | F2 | D-pad up |
-| Toggle explicit hover hold | H | West face button (X / Square) |
+| Hover-hold status (deferred) | H | West face button (X / Square) |
 | Development overlay | F1 | D-pad right |
 
 Mouse up commands forward pitch and mouse right commands right roll; either mouse axis can be inverted independently. Gamepad up commands forward pitch. Keyboard and trigger collective inputs change a persistent 0–100% setting, initially zero. Releasing them holds the setting. Pressing opposing inputs at equal strength cancels their adjustment; triggers adjust proportionally to pressure. Collective controls lift demand, not altitude or vertical speed.

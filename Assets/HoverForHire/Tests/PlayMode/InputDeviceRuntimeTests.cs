@@ -17,16 +17,33 @@ namespace HoverForHire.Tests
         private Mouse _mouse, _previousMouse;
         private Gamepad _gamepad, _previousGamepad;
         private InputSettings.UpdateMode _previousUpdateMode;
+        private InputSettings.BackgroundBehavior _previousBackgroundBehavior;
+#if UNITY_EDITOR
+        private InputSettings.EditorInputBehaviorInPlayMode _previousEditorBehavior;
+#endif
         private CursorLockMode _previousCursorLock;
         private bool _previousCursorVisible;
         private string _preferencesBefore, _bindingsBefore;
         private bool _hadPreferences, _hadBindings;
         private const float Frame = 1f / 60f;
 
+        private string DeviceDiagnostic => "paused=" + _input.IsPaused + "; map=" + _input.ActionAsset.FindActionMap("Flight").enabled + "; " +
+            $"keyboardEnabled={_keyboard.enabled}; W={_keyboard.wKey.ReadValue()}; shift={_keyboard.leftShiftKey.ReadValue()}; " +
+            "cyclicAction=" + _input.ActionAsset.FindAction("KeyboardCyclic").ReadValue<Vector2>() + "; " +
+            "collectiveControls=" + _input.ActionAsset.FindAction("CollectiveIncrease").controls.Count + "; " +
+            "collectiveAction=" + _input.ActionAsset.FindAction("CollectiveIncrease").ReadValue<float>();
+
         [SetUp]
         public void SetUp()
         {
             _previousUpdateMode = InputSystem.settings.updateMode;
+            _previousBackgroundBehavior = InputSystem.settings.backgroundBehavior;
+#if UNITY_EDITOR
+            _previousEditorBehavior = InputSystem.settings.editorInputBehaviorInPlayMode;
+            InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+#endif
+            // Batch tests have no focused Game View. Route their manual updates into player action state.
+            InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
             _previousCursorLock = Cursor.lockState;
             _previousCursorVisible = Cursor.visible;
             _previousKeyboard = Keyboard.current; _previousMouse = Mouse.current; _previousGamepad = Gamepad.current;
@@ -62,6 +79,10 @@ namespace HoverForHire.Tests
             if (_previousMouse != null && _previousMouse.added) _previousMouse.MakeCurrent();
             if (_previousGamepad != null && _previousGamepad.added) _previousGamepad.MakeCurrent();
             InputSystem.settings.updateMode = _previousUpdateMode;
+            InputSystem.settings.backgroundBehavior = _previousBackgroundBehavior;
+#if UNITY_EDITOR
+            InputSystem.settings.editorInputBehaviorInPlayMode = _previousEditorBehavior;
+#endif
             Cursor.lockState = _previousCursorLock;
             Cursor.visible = _previousCursorVisible;
             // Suppression makes these read-only checks: the fixture never deletes or overwrites real saves.
@@ -85,7 +106,7 @@ namespace HoverForHire.Tests
         {
             var held = new KeyboardState(Key.W, Key.D, Key.E, Key.LeftShift);
             for (int i = 0; i < 150; i++) Step(held);
-            Assert.That(_input.Command.Collective, Is.EqualTo(0.6f).Within(0.0001f));
+            Assert.That(_input.Command.Collective, Is.EqualTo(0.6f).Within(0.0001f), DeviceDiagnostic);
             Assert.That(_input.Command.Cyclic.x, Is.GreaterThan(0.65f));
             Assert.That(_input.Command.Cyclic.y, Is.GreaterThan(0.65f));
             Assert.That(_input.Command.Yaw, Is.EqualTo(1f));

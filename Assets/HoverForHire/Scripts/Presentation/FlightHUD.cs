@@ -41,6 +41,7 @@ namespace HoverForHire
         void HoverNotice(){notice="Hover hold is deferred. Use rate / level assist and practice a steady collective.";noticeUntil=Time.unscaledTime+6;}
         void CycleAssists(){preset=(preset+1)%3;Aircraft.SetPreset((AssistPreset)preset);Save();}
         void TogglePause()=>SetPause(!paused);
+        public void SelectMenuPage(int index){page=Mathf.Clamp(index,0,3);scroll=Vector2.zero;menuFocus=0;}
         void SetPause(bool state){paused=state;Input.SetPaused(state);Time.timeScale=state?0:1;menuActivate=false;menuAdjust=0;menuDirection=Vector2Int.zero;if(!state)Save();}
         void Retry(){Missions.Retry();Input.ResetCommand();notice="Reset complete. Collective is at 0%.";noticeUntil=Time.unscaledTime+4;}
         void Interact(){if(!paused)Missions.Interact();}
@@ -60,7 +61,8 @@ namespace HoverForHire
             GUI.Label(new Rect(42,59,426,50),Missions.CurrentObjective,label);
             Box(new Rect(24,131,390,83),.83f);GUI.Label(new Rect(40,142,358,60),Missions.StatusText,small);
             DrawMap(); DrawInstruments(); DrawTarget();
-            GUI.Label(new Rect(28,Height-31,1000,24),"ESC  Menu     V  Camera     ALT / MMB  Look     C  Center cyclic     BACKSPACE  Retry     ENTER  Job     F1  Telemetry",small);
+            Box(new Rect(24,683,1232,29),.9f);
+            GUI.Label(new Rect(36,Height-31,1190,24),"ESC  Menu     V  Camera     ALT / MMB  Look     C  Center cyclic     BACKSPACE  Retry     ENTER  Job     F1  Telemetry",small);
             if(Time.unscaledTime<noticeUntil){Box(new Rect(330,490,620,54),.88f);GUI.Label(new Rect(347,501,586,40),notice,small);}
             if(!string.IsNullOrEmpty(Missions.SaveWarning)){Box(new Rect(330,530,620,38),.95f);GUI.Label(new Rect(342,534,596,31),Missions.SaveWarning,small);}
             if(Aircraft.Crashed){Box(new Rect(390,255,500,180),.97f);GUI.Label(new Rect(416,279,450,38),"AIRCRAFT RECOVERY",title);GUI.Label(new Rect(416,323,450,44),"Flight ended. Reset at the pad and try a slower approach.",label);if(GUI.Button(new Rect(416,377,450,40),"Retry  /  Backspace",button))Retry();}

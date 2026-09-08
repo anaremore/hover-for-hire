@@ -2,6 +2,10 @@
 
 A single-player helicopter delivery game and computer control practice sandbox. Fly one civilian utility helicopter around Port Meridian, a compact island with ten landing locations. This is an early playable vertical slice: handling and camera tuning need human playtesting.
 
+![Flight over Port Meridian](Docs/Screenshots/flight.png)
+
+Verified on 8 September 2026: **81 automated tests passed**, all three desktop players built, and Windows scripted flights passed at 30/60/144 FPS. Native macOS/Linux playtesting remains outstanding.
+
 ## Quick start
 
 1. Open this folder in **Unity 6000.3.22f1 (Unity 6.3 LTS)**. Install the Windows, macOS, or Linux **Mono** build support module for your desired player.
@@ -41,7 +45,9 @@ All bindings are editable from the flight desk. Mouse displacement is integrated
 
 ## Build and test
 
-Use **Hover for Hire → Build → Windows / macOS / Linux**. Development builds are written to `Builds/<platform>`. Windows uses x64; macOS uses Unity's standalone architecture setting; Linux uses x64. macOS signing/notarization and Linux execute permissions remain distribution tasks.
+Use **Hover for Hire → Build → Windows / macOS / Linux**. Development builds are written to `Builds/<platform>`. The verified builds are Windows x64, macOS universal (Intel + Apple silicon), and Linux x64. The macOS and Linux players have compiled on Windows but still need native launch/controller/audio testing. macOS distribution signing/notarization remains a release task.
+
+Ready-to-extract archives are generated locally as `Builds/Hover-for-Hire-Windows.zip`, `Builds/Hover-for-Hire-macOS.zip`, and `Builds/Hover-for-Hire-Linux.zip`. Run `python Tools/package_builds.py` after rebuilding to regenerate them and their SHA-256 files. It preserves executable modes for macOS/Linux. Keep each player's data folders beside its executable.
 
 PowerShell helper (close the editor for this project first):
 

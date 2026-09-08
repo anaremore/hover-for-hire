@@ -48,6 +48,9 @@ namespace HoverForHire
             game.CameraRig.ToggleCamera();
             Command=PilotCommand.Neutral;game.Missions.Retry();yield return new WaitForSeconds(2);
             var hud=game.GetComponent<FlightHUD>();hud.SendMessage("TogglePause");yield return null;yield return Capture("05-menu.png");
+            hud.SelectMenuPage(1);yield return null;yield return Capture("06-controls.png");
+            hud.SelectMenuPage(2);yield return null;yield return Capture("07-bindings.png");
+            hud.SelectMenuPage(3);yield return null;yield return Capture("08-assists-camera.png");
             File.WriteAllText(Path.Combine(output,"runtime-smoke.json"),JsonUtility.ToJson(new Report {Errors=errors,FrameLimit=frameLimit,AverageFps=measuredFrames/Mathf.Max(.1f,Time.unscaledTime-measurementStart),PeakAltitude=peakAltitude,PeakSpeed=peakSpeed,StartedGrounded=startedGrounded,ResetGrounded=game.Aircraft.Grounded,EverCrashed=everCrashed,Engine=Application.unityVersion},true));
             Application.Quit(errors==0&&peakAltitude>4&&peakSpeed>1&&!everCrashed&&startedGrounded&&game.Aircraft.Grounded?0:1);
         }
