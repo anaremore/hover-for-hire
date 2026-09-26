@@ -1,3 +1,5 @@
+// Development builds and the editor only: release players do not carry the smoke flight.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
 using System;
 using System.Collections;
 using System.IO;
@@ -270,3 +272,4 @@ namespace HoverForHire
         }
     }
 }
+#endif

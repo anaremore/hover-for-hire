@@ -1,3 +1,5 @@
+// Development builds and the editor only: release players do not carry the smoke flight's audio capture.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
 using System;
 using System.IO;
 using UnityEngine;
@@ -63,3 +65,4 @@ namespace HoverForHire
         }
     }
 }
+#endif

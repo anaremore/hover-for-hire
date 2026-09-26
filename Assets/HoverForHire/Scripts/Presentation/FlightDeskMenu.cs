@@ -18,6 +18,7 @@ namespace HoverForHire
         private readonly FlightHUD hud;
         private int page, focus, count, index, adjust;
         private bool welcome, activate, scrollToFocus, insideScroll;
+        private string versionLabel;
         private Vector2 scroll;
         private Vector2Int direction;
         private float repeatAt;
@@ -74,6 +75,8 @@ namespace HoverForHire
             S.Text(new Rect(left + 26, 44, 600, 22), "MERIDIAN AIR SERVICE  /  OPERATIONS", S.HudSmall, FlightHudGraphics.Amber);
             GUI.Label(new Rect(left + 26, 73, 600, 40), "Flight desk", S.Title);
             S.Text(new Rect(left + 654, 76, 220, 25), "FLIGHT PAUSED", S.HudRight, FlightHudGraphics.Phosphor);
+            versionLabel ??= "VERSION " + Application.version;
+            S.Text(new Rect(left + 654, 44, 220, 22), versionLabel, S.HudRight, FlightHudGraphics.Amber);
             GUI.Label(new Rect(left + 26, 116, 850, 25), "D-pad / stick  Navigate      Left / right  Adjust      A  Select      B / Escape  Resume", S.Small);
             GUILayout.BeginArea(new Rect(left + 24, 151, 852, 518));
             if (welcome) WelcomePage();

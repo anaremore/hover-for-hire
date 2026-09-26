@@ -1,3 +1,5 @@
+// Development builds and the editor only: release players do not carry the smoke flight's autopilot (also used by the tests).
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
 using UnityEngine;
 
 namespace HoverForHire
@@ -148,3 +150,4 @@ namespace HoverForHire
         }
     }
 }
+#endif

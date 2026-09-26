@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
@@ -6,12 +7,15 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using Debug = UnityEngine.Debug;
 
 namespace HoverForHire.Editor
 {
     public static class ProjectSetup
     {
         public const string ScenePath = "Assets/HoverForHire/Scenes/PortMeridian.unity";
+        /// <summary>The game's version, set only here. Builds, archive names and the Flight Desk read it.</summary>
+        public const string Version = "0.3.0";
         [MenuItem("Hover for Hire/Prepare project")]
         public static void Prepare()
         {
@@ -37,12 +41,14 @@ namespace HoverForHire.Editor
             QualitySettings.shadows = UnityEngine.ShadowQuality.All;
             PlayerSettings.companyName = "Hover for Hire";
             PlayerSettings.productName = "Hover for Hire";
-            PlayerSettings.bundleVersion = "0.2.0";
+            PlayerSettings.bundleVersion = Version;
             PlayerSettings.colorSpace = ColorSpace.Linear;
             PlayerSettings.defaultScreenWidth = 1600;
             PlayerSettings.defaultScreenHeight = 900;
             PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
             PlayerSettings.runInBackground = true;
+            // CPU and GPU frame times for the opt-in benchmark (FrameTimingManager), also in release builds.
+            PlayerSettings.enableFrameTimingStats = true;
             var ps = new SerializedObject(Unsupported.GetSerializedAssetInterfaceSingleton("PlayerSettings"));
             ps.FindProperty("activeInputHandler").intValue = 2;
             ps.ApplyModifiedPropertiesWithoutUndo();
@@ -165,20 +171,66 @@ namespace HoverForHire.Editor
         }
         [MenuItem("Hover for Hire/Build/Windows")]
         public static void BuildWindows() => Build(BuildTarget.StandaloneWindows64, "Builds/Windows/Hover for Hire.exe");
+        [MenuItem("Hover for Hire/Build/Windows (development)")]
+        public static void BuildWindowsDevelopment() => Build(BuildTarget.StandaloneWindows64, "Builds/Windows-Development/Hover for Hire.exe", true);
         [MenuItem("Hover for Hire/Build/macOS")]
         public static void BuildMac() => Build(BuildTarget.StandaloneOSX, "Builds/macOS/Hover for Hire.app");
         [MenuItem("Hover for Hire/Build/Linux")]
         public static void BuildLinux() => Build(BuildTarget.StandaloneLinux64, "Builds/Linux/Hover for Hire.x86_64");
-        static void Build(BuildTarget target, string path)
+        // Release builds by default. The development variant adds the runtime smoke flight, its autopilot and audio
+        // capture, and profiler support; Tools/Smoke.ps1 runs it.
+        static void Build(BuildTarget target, string path, bool development = false)
         {
             Prepare();
             if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone, target))
                 throw new InvalidOperationException("Install the Unity platform build support module for " + target);
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { ScenePath }, locationPathName = path, target = target, options = BuildOptions.Development });
+            var options = development ? BuildOptions.Development : BuildOptions.None;
+            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { ScenePath }, locationPathName = path, target = target, options = options });
             if (report.summary.result != BuildResult.Succeeded)
                 throw new Exception("Build failed: " + report.summary.result);
-            Debug.Log("HOVER_BUILD_OK " + target + " " + report.summary.totalSize);
+            WriteBuildInfo(Path.GetDirectoryName(path), target, development);
+            Debug.Log("HOVER_BUILD_OK " + target + (development ? " development " : " release ") + report.summary.totalSize);
+        }
+
+        // Records what was built, so Tools/package_builds.py can refuse development builds and builds of other commits.
+        static void WriteBuildInfo(string folder, BuildTarget target, bool development)
+        {
+            var info = new BuildInfo
+            {
+                Version = Version,
+                Target = target.ToString(),
+                Development = development,
+                BuiltUtc = DateTime.UtcNow.ToString("o"),
+                Commit = Git("rev-parse HEAD"),
+                UncommittedChanges = Git("status --porcelain").Length > 0,
+            };
+            File.WriteAllText(Path.Combine(folder, "build-info.json"), JsonUtility.ToJson(info, true));
+        }
+
+        static string Git(string arguments)
+        {
+            try
+            {
+                var start = new ProcessStartInfo("git", arguments) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+                using (var process = Process.Start(start))
+                {
+                    string text = process.StandardOutput.ReadToEnd().Trim();
+                    process.WaitForExit();
+                    return process.ExitCode == 0 ? text : "";
+                }
+            }
+            catch (Exception)
+            {
+                return "";
+            }
+        }
+
+        [Serializable]
+        class BuildInfo
+        {
+            public string Version, Target, BuiltUtc, Commit;
+            public bool Development, UncommittedChanges;
         }
     }
 }

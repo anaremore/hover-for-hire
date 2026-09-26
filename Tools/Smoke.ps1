@@ -6,13 +6,14 @@ param(
     [string]$Label = 'smoke',
     [string]$Player = ''
 )
-# Runs the opt-in RuntimeSmoke flight in the built Windows player at each frame cap and summarizes the reports.
+# Runs the opt-in RuntimeSmoke flight in the development Windows player (Tools\Unity.ps1 WindowsDev) at each frame cap
+# and summarizes the reports. Release players do not contain the smoke flight.
 # Writes Artifacts/<Label>-<fps>/runtime-smoke.json (+ screenshots) and Artifacts/<Label>-<fps>.log.
 # Note: the player saves its normal PlayerPrefs (controls/assists/volume) like any play session.
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
-if (-not $Player) { $Player = Join-Path $projectRoot 'Builds\Windows\Hover for Hire.exe' }
-if (-not (Test-Path -LiteralPath $Player)) { throw "Player not found: $Player (run Tools\Unity.ps1 Windows first)." }
+if (-not $Player) { $Player = Join-Path $projectRoot 'Builds\Windows-Development\Hover for Hire.exe' }
+if (-not (Test-Path -LiteralPath $Player)) { throw "Player not found: $Player (run Tools\Unity.ps1 WindowsDev first)." }
 $artifacts = Join-Path $projectRoot 'Artifacts'
 $failed = 0
 foreach ($rate in $Fps) {

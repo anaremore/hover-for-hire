@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Prepare','EditMode','PlayMode','Windows','macOS','Linux')]
+    [ValidateSet('Prepare','EditMode','PlayMode','Windows','WindowsDev','macOS','Linux')]
     [string]$Task = 'Prepare',
     [string]$Editor = $env:UNITY_EDITOR
 )
@@ -18,7 +18,7 @@ $arguments = @('-batchmode', '-projectPath', ('"' + $projectRoot + '"'), '-logFi
 if ($Task -in @('EditMode','PlayMode')) {
     $arguments += @('-nographics','-runTests','-testPlatform',$Task,'-testResults',('"' + (Join-Path $artifacts ($Task + '.xml')) + '"'))
 } else {
-    $method = @{Prepare='Prepare';Windows='BuildWindows';macOS='BuildMac';Linux='BuildLinux'}[$Task]
+    $method = @{Prepare='Prepare';Windows='BuildWindows';WindowsDev='BuildWindowsDevelopment';macOS='BuildMac';Linux='BuildLinux'}[$Task]
     $arguments += @('-executeMethod', ('HoverForHire.Editor.ProjectSetup.' + $method), '-quit')
     if ($Task -eq 'Prepare') { $arguments += '-nographics' }
 }
