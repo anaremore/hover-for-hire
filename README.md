@@ -38,7 +38,15 @@ If setup assets ever need regeneration, use **Hover for Hire → Prepare project
 - Free Flight, twelve training drills (the basics, then crosswind, heavy lift, settling with power, autorotation and confined-area landings), passenger and internal cargo deliveries, stable loading/unloading, comfort/condition/landing/time scores, optional harder contracts, progression, and duplicate payout prevention.
 - Ten pads across a detailed coastal town, airport, ferry harbor, industrial yard, rooftop clinic, orchard, hills and remote sites; mixed forests, marked roads, boats and shoreline scenery.
 - Original modeled utility helicopter, live cockpit gauges, smooth painted/alloy/glass materials, textured terrain, animated water, cloud sky, soft shadows and film grading.
-- Transparent flight HUD, terrain minimap, compact cockpit readouts and a redesigned Flight Desk.
+- A decluttered flight HUD that keeps the aircraft clear:
+  - airspeed (through the air) and altitude tapes, with ground speed and vertical speed beside them;
+  - a compact attitude indicator;
+  - a collective gauge with in- and out-of-ground-effect hover marks;
+  - torque and rotor-RPM gauges when power limits are on;
+  - a wind arrow and a job clock;
+  - a heading-up hover display that replaces the chart near pads, showing drift, drift trend, a service-limit ring that turns green, and the pad's position.
+
+  Every readout, objective and hint follows the chosen Metric or Aviation units.
 - Surface-aware landing rotor wash, dust, sparks, smoke, water spray, graded crash debris, high-energy explosions and camera shake. Reset restores aircraft parts and clears effects.
 
 ## Controls

@@ -241,7 +241,7 @@ namespace HoverForHire
             PilotSettings settings = hud.Settings;
             GUILayout.Label("Units · Metric uses km/h, m/s and metres; Aviation uses knots, feet per minute and feet", S.Label);
             int units = Toolbar((int)settings.Units, new[] { "Metric", "Aviation" });
-            if (units != (int)settings.Units) { settings.Units = (UnitSystem)units; hud.Save(); }
+            if (units != (int)settings.Units) hud.SetUnits((UnitSystem)units);
             InputPreferences s = Input.Settings;
             GUILayout.Label("Camera", S.Label);
             Slider("Camera distance / m", ref s.CameraDistance, 5, 25);

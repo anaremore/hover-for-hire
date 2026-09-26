@@ -3,9 +3,18 @@ using Object = UnityEngine.Object;
 
 namespace HoverForHire
 {
-    /// <summary>The flight HUD: mission panel, compass, tapes, attitude, status, chart, target, warnings and notices.</summary>
+    /// <summary>
+    /// The flight HUD. The chase view keeps the aircraft clear: tapes sit wide, a compact attitude indicator, collective
+    /// and power gauges sit in a bottom cluster, and a heading-up hover display takes the chart's place near a pad.
+    /// The cockpit view keeps its overlays in the side columns above the instrument panel.
+    /// </summary>
     public sealed class FlightInstrumentsView
     {
+        private const float TapeCenterY = 330f, TapeHalf = 94f, TapeOffset = 400f, ClusterY = 612f;
+        private static readonly Color Green = new Color(.45f, .95f, .55f);
+        private static readonly Color Red = new Color(1f, .3f, .24f);
+        private static readonly Color Faint = new Color(.8f, .94f, .7f, .22f);
+
         private readonly FlightHUD hud;
         private readonly GUIContent objectiveMeasure = new GUIContent();
         private Texture2D mapTexture;
@@ -22,67 +31,48 @@ namespace HoverForHire
         {
             if (mapTexture == null) mapTexture = BuildMapTexture();
             DrawMission();
-            DrawInstruments();
-            DrawMap();
+            DrawCompass();
+            DrawJobInfo();
+            DrawWind();
+            if (M.Cockpit) DrawCockpitColumn();
+            else DrawChaseInstruments();
+            DrawCyclicIndicator();
+            DrawAircraftStatus();
+            if (M.HoverVisible) DrawHoverDisplay();
+            else DrawMap();
             DrawTarget();
             S.Text(new Rect(26, 690, 960, 20), M.FooterHint, S.HudSmall, FlightHudGraphics.Muted);
+            float stackBottom = DrawWarnings();
             if (hud.NoticeVisible)
             {
-                var r = new Rect(Width / 2 - 257, 535, 514, 48);
-                S.Box(r, .72f);
+                var r = new Rect(Width / 2 - 257, stackBottom + 4, 514, 46);
+                S.Box(r, .78f);
                 FlightHudGraphics.Fill(new Rect(r.x, r.y, 2, r.height), FlightHudGraphics.Amber);
-                GUI.Label(new Rect(r.x + 14, r.y + 9, r.width - 28, 36), hud.Notice, S.Small);
+                GUI.Label(new Rect(r.x + 14, r.y + 7, r.width - 28, 36), hud.Notice, S.Small);
             }
             if (!string.IsNullOrEmpty(Missions.SaveWarning))
             {
-                S.Box(new Rect(Width / 2 - 280, 590, 560, 48), .92f);
-                GUI.Label(new Rect(Width / 2 - 266, 598, 532, 36), Missions.SaveWarning, S.Small);
+                S.Box(new Rect(Width / 2 - 280, 500, 560, 48), .92f);
+                GUI.Label(new Rect(Width / 2 - 266, 508, 532, 36), Missions.SaveWarning, S.Small);
             }
             if (Aircraft.Crashed) DrawCrashPanel();
-            DrawWarnings();
             if (hud.DebugVisible) DrawDebug();
         }
 
-        private void DrawCrashPanel()
-        {
-            var r = new Rect(Width / 2 - 255, 248, 510, 190);
-            S.Box(r, .97f);
-            FlightHudGraphics.Fill(new Rect(r.x, r.y, r.width, 3), FlightHudGraphics.Amber);
-            GUI.Label(new Rect(r.x + 24, r.y + 18, 462, 38), M.CrashTitle, S.Title);
-            GUI.Label(new Rect(r.x + 24, r.y + 58, 462, 26), M.CrashDetail, S.Label);
-            GUI.Label(new Rect(r.x + 24, r.y + 86, 462, 44), M.CrashAdvice, S.Small);
-            if (GUI.Button(new Rect(r.x + 24, r.y + 132, 462, 44), M.RetryLabel, S.Button)) hud.Retry();
-        }
-
-        private void DrawWarnings()
-        {
-            float y = 146;
-            foreach (HudModel.Warning warning in M.Warnings)
-            {
-                var r = new Rect(Width / 2 - 170, y, 340, 26);
-                S.Box(r, .8f);
-                FlightHudGraphics.Fill(new Rect(r.x, r.y, 3, r.height), warning.Color);
-                S.Text(new Rect(r.x, r.y + 2, r.width, 22), warning.Text, S.HudCenter, warning.Color);
-                y += 30;
-            }
-        }
+        // ---- Mission, compass, job clock, wind ----
 
         private void DrawMission()
         {
-            // The panel grows with the wrapped objective, so longer drill briefs never run into the status line.
+            // The panel grows with the wrapped objective, so long drill briefs never run into the status line.
             objectiveMeasure.text = M.Objective;
-            float objective = Mathf.Max(49, S.Label.CalcHeight(objectiveMeasure, 316)), height = 126 + objective - 49;
+            float objective = Mathf.Max(24, S.Label.CalcHeight(objectiveMeasure, 316));
+            bool status = M.Status.Length > 0;
+            float height = 39 + objective + (status ? 45 : 10);
             S.Box(new Rect(26, 26, 348, height), .61f);
             FlightHudGraphics.Fill(new Rect(26, 26, 3, height), FlightHudGraphics.Amber);
             S.Text(new Rect(42, 36, 316, 20), M.ModeHeader, S.HudSmall, FlightHudGraphics.Amber);
-            GUI.Label(new Rect(42, 65, 316, objective), M.Objective, S.Label);
-            GUI.Label(new Rect(42, 65 + objective, 316, 37), M.Status, S.Small);
-            float right = Width - 244;
-            S.Text(new Rect(right, 28, 216, 20), M.RightCaption, S.HudRight, FlightHudGraphics.Muted);
-            S.Text(new Rect(right, 51, 216, 36), M.RightValue, S.HudValueRight, FlightHudGraphics.Paper);
-            S.Text(new Rect(right, 91, 216, 22), M.EarningsLine, S.HudRight);
-            if (M.TrainingLine.Length > 0) S.Text(new Rect(right - 60, 119, 276, 24), M.TrainingLine, S.HudRight);
-            DrawCompass();
+            GUI.Label(new Rect(42, 62, 316, objective), M.Objective, S.Label);
+            if (status) GUI.Label(new Rect(42, 64 + objective, 316, 37), M.Status, S.Small);
         }
 
         private void DrawCompass()
@@ -106,67 +96,69 @@ namespace HoverForHire
             FlightHudGraphics.Line(new Vector2(cx, 77), new Vector2(cx + 5, 82), FlightHudGraphics.Paper, 1.6f);
             S.Box(new Rect(cx - 35, 88, 70, 27), .48f);
             S.Text(new Rect(cx - 35, 87, 70, 27), M.HeadingText, S.HudCenter, FlightHudGraphics.Paper);
-            if (M.RecordingText.Length > 0) S.Text(new Rect(cx - 70, 118, 140, 22), M.RecordingText, S.HudCenter, new Color(1f, .32f, .25f));
+            if (M.RecordingText.Length > 0) S.Text(new Rect(cx - 70, 118, 140, 22), M.RecordingText, S.HudCenter, Red);
         }
 
-        private void DrawInstruments()
+        private void DrawJobInfo()
+        {
+            float right = Width - 244;
+            if (M.ShiftCaption.Length > 0)
+            {
+                S.Text(new Rect(right, 28, 216, 20), M.ShiftCaption, S.HudRight, FlightHudGraphics.Muted);
+                S.Text(new Rect(right, 48, 216, 36), M.ShiftValue, S.HudValueRight, FlightHudGraphics.Paper);
+                S.Text(new Rect(right, 86, 216, 22), M.EarningsLine, S.HudRight);
+                if (M.JobClock.Length > 0) S.Text(new Rect(right - 60, 108, 276, 22), M.JobClock, S.HudRight, M.JobClockColor);
+            }
+            else if (M.TrainingLine.Length > 0)
+            {
+                S.Text(new Rect(right, 28, 216, 20), "DRILL", S.HudRight, FlightHudGraphics.Muted);
+                S.Text(new Rect(right - 60, 48, 276, 24), M.TrainingLine, S.HudRight, FlightHudGraphics.Paper);
+            }
+        }
+
+        /// <summary>Wind arrow, heading-up: it enters from the side the wind comes from and points downwind.</summary>
+        private void DrawWind()
+        {
+            if (!M.WindVisible) return;
+            var center = new Vector2(Width - 50, M.Cockpit ? 150 : 162);
+            const float radius = 18;
+            FlightHudGraphics.Circle(center, radius, FlightHudGraphics.Muted, 28);
+            FlightHudGraphics.Line(center + Vector2.up * -radius, center + Vector2.up * (-radius - 5), FlightHudGraphics.Paper);
+            float angle = M.WindFromRelative * Mathf.Deg2Rad;
+            var from = new Vector2(Mathf.Sin(angle), -Mathf.Cos(angle));
+            Vector2 tail = center + from * (radius + 6), tip = center - from * (radius - 6);
+            FlightHudGraphics.Line(tail, tip, FlightHudGraphics.Amber, 2f);
+            Vector2 side = new Vector2(-from.y, from.x);
+            FlightHudGraphics.Line(tip, tip + from * 7 + side * 5, FlightHudGraphics.Amber, 2f);
+            FlightHudGraphics.Line(tip, tip + from * 7 - side * 5, FlightHudGraphics.Amber, 2f);
+            S.Text(new Rect(Width - 300, center.y - 20, 222, 20), M.WindText, S.HudRight);
+            if (M.WindPeakText.Length > 0) S.Text(new Rect(Width - 300, center.y + 1, 222, 20), M.WindPeakText, S.HudRight, FlightHudGraphics.Amber);
+        }
+
+        // ---- Chase view ----
+
+        private void DrawChaseInstruments()
         {
             float cx = Width / 2;
-            bool cockpit = M.Cockpit;
-            if (cockpit)
-            {
-                S.Text(new Rect(30, 235, 156, 22), "AIR SPEED", S.HudSmall, FlightHudGraphics.Muted);
-                S.Text(new Rect(30, 260, 170, 35), M.SpeedReadout, S.HudValue);
-                S.Text(new Rect(Width - 178, 235, 150, 22), "SKID AGL", S.HudRight, FlightHudGraphics.Muted);
-                S.Text(new Rect(Width - 190, 260, 162, 35), M.HeightReadout, S.HudValueRight);
-            }
-            else
-            {
-                bool aviation = M.Units == UnitSystem.Aviation;
-                DrawTape(cx - 281, M.SpeedValue, M.SpeedTapeReadout, "AIR SPEED", M.SpeedUnit, true, 5, 3.8f);
-                DrawTape(cx + 281, M.HeightValue, M.HeightTapeReadout, "SKID AGL", M.HeightUnit, false, aviation ? 10 : 5, aviation ? 3.8f * UnitFormat.MetresPerFoot : 3.8f);
-                DrawAttitude(cx);
-            }
-            float verticalX = cockpit ? Width - 157 : cx + 266, verticalY = cockpit ? 306 : 446;
-            S.Text(new Rect(verticalX, verticalY, 130, 22), M.VerticalSpeedText, cockpit ? S.HudRight : S.HudCenter,
+            bool aviation = M.Units == UnitSystem.Aviation;
+            float speedX = cx - TapeOffset, heightX = cx + TapeOffset;
+            DrawTape(speedX, M.SpeedValue, M.SpeedTapeReadout, "AIR SPEED", M.SpeedUnit, true, 5, 3.8f);
+            DrawTape(heightX, M.HeightValue, M.HeightTapeReadout, "SKID AGL", M.HeightUnit, false,
+                aviation ? 10 : 5, aviation ? 3.8f * UnitFormat.MetresPerFoot : 3.8f);
+            S.Text(new Rect(speedX + 14, TapeCenterY + 28, 170, 20), M.GroundSpeedText, S.HudSmall);
+            S.Text(new Rect(heightX - 184, TapeCenterY + 26, 170, 22), M.VerticalSpeedLine, S.HudRight,
                 M.VerticalSpeedCaution ? FlightHudGraphics.Amber : FlightHudGraphics.Phosphor);
-            S.Text(new Rect(verticalX, verticalY + 23, 130, 20), "VERT SPEED", cockpit ? S.HudRight : S.HudCenter, FlightHudGraphics.Muted);
-            if (cockpit)
-            {
-                S.Text(new Rect(30, 351, 272, 22), M.PayloadLine, S.HudSmall, FlightHudGraphics.Muted);
-                S.Text(new Rect(30, 376, 320, 22), M.CockpitCollectiveLine, S.HudSmall);
-                S.Text(new Rect(30, 401, 290, 38), M.CockpitAssistsLine, S.HudSmall, FlightHudGraphics.Muted);
-            }
-            else
-            {
-                S.Text(new Rect(cx - 99, 624, 198, 22), M.CollectiveText, S.HudCenter);
-                S.Bar(new Rect(cx - 91, 654, 182, 5), M.Collective, FlightHudGraphics.Phosphor);
-                for (int i = 0; i <= 4; i++) FlightHudGraphics.Fill(new Rect(cx - 91 + i * 45.5f, 650, 1, 13), FlightHudGraphics.Muted);
-                // Hover reference for the current weight: level, still air, out of ground effect.
-                float hoverX = cx - 91 + 182 * Mathf.Clamp01(M.HoverCollective);
-                FlightHudGraphics.Fill(new Rect(hoverX - 1, 645, 2, 19), FlightHudGraphics.Amber);
-                S.Text(new Rect(hoverX - 30, 664, 60, 16), "HOVER", S.HudCenter, FlightHudGraphics.Amber);
-                DrawAircraftStatus();
-            }
-            FlightInput input = hud.Input;
-            if (input.Settings.ShowCyclicIndicator || input.Settings.MouseMode == MouseCyclicMode.VirtualJoystick)
-            {
-                Vector2 center = cockpit ? new Vector2(Width - 106, 373) : new Vector2(cx + 169, 625);
-                FlightHudGraphics.Circle(center, 26, FlightHudGraphics.Muted);
-                FlightHudGraphics.Line(center + Vector2.left * 30, center + Vector2.right * 30, new Color(.8f, .9f, .7f, .32f));
-                FlightHudGraphics.Line(center + Vector2.up * 30, center + Vector2.down * 30, new Color(.8f, .9f, .7f, .32f));
-                Vector2 c = input.Command.Cyclic;
-                FlightHudGraphics.Circle(center + new Vector2(c.x, -c.y) * 23, 3, FlightHudGraphics.Amber, 12, 2);
-                S.Text(new Rect(center.x - 49, center.y + 33, 98, 21), input.IsFreeLooking ? "FREE LOOK" : "CYCLIC", S.HudCenter, FlightHudGraphics.Muted);
-            }
+            DrawAttitudeIndicator(new Vector2(cx - 250, ClusterY), 40);
+            DrawCollective(cx - 195, 568, 180);
+            if (M.PowerLimits) DrawPower(cx + 10, 568, 90);
         }
 
         /// <summary>A moving tape with minor marks every <paramref name="step"/> units and labels every two steps.</summary>
         private void DrawTape(float x, float number, string readoutText, string caption, string unit, bool left, int step, float pixels)
         {
-            const float cy = 340, half = 94;
-            S.Text(new Rect(x - 54, 218, 108, 22), caption, S.HudCenter, FlightHudGraphics.Muted);
-            S.Text(new Rect(x - 44, 241, 88, 20), unit, S.HudCenter);
+            const float cy = TapeCenterY, half = TapeHalf;
+            S.Text(new Rect(x - 54, cy - 122, 108, 22), caption, S.HudCenter, FlightHudGraphics.Muted);
+            S.Text(new Rect(x - 44, cy - 101, 88, 20), unit, S.HudCenter);
             int baseMark = Mathf.FloorToInt(number / step) * step;
             int span = Mathf.CeilToInt(half / (pixels * step)) + 1;
             for (int i = -span; i <= span; i++)
@@ -188,61 +180,115 @@ namespace HoverForHire
             FlightHudGraphics.Line(new Vector2(x, cy), new Vector2(x + (left ? -6 : 6), cy + 5), FlightHudGraphics.Phosphor);
         }
 
-        private void DrawAttitude(float cx)
+        /// <summary>Compact attitude indicator: horizon and pitch marks turn with bank; the aircraft symbol stays fixed.</summary>
+        private void DrawAttitudeIndicator(Vector2 center, float radius)
         {
             Quaternion attitude = Aircraft.Body != null ? Aircraft.Body.rotation : Aircraft.transform.rotation;
             Vector3 forward = attitude * Vector3.forward, right = attitude * Vector3.right, up = attitude * Vector3.up;
             float pitch = Mathf.Asin(Mathf.Clamp(forward.y, -1, 1)) * Mathf.Rad2Deg;
             float roll = Mathf.Atan2(right.y, up.y) * Mathf.Rad2Deg;
-            // Attitude comes from the aircraft relative to world up, even in an orbiting chase view. Keep it in the same
-            // logical coordinate space as the tapes: a nested GUI clip would add its own pivot offset above 720p.
+            const float pixelsPerDegree = 1.6f;
+            S.Box(new Rect(center.x - radius - 4, center.y - radius - 4, radius * 2 + 8, radius * 2 + 8), .45f);
+            FlightHudGraphics.Circle(center, radius, FlightHudGraphics.Muted, 40);
+            // Fixed bank scale at the top: 0, 10, 20, 30 and 45 degrees each side.
+            foreach (float bank in new[] { -45f, -30f, -20f, -10f, 0f, 10f, 20f, 30f, 45f })
+            {
+                float a = bank * Mathf.Deg2Rad;
+                var direction = new Vector2(Mathf.Sin(a), -Mathf.Cos(a));
+                FlightHudGraphics.Line(center + direction * radius, center + direction * (radius + (bank == 0f ? 7 : 4)), FlightHudGraphics.Muted);
+            }
             Matrix4x4 previous = GUI.matrix;
-            var center = new Vector2(cx, 340);
+            // Keep in the same logical space as the tapes: a nested GUI clip would add its own pivot offset above 720p.
             GUI.matrix = previous * FlightHudGraphics.RotationAround(center, roll);
-            for (int mark = -80; mark <= 80; mark += 10)
+            for (int mark = -20; mark <= 20; mark += 10)
             {
-                float y = center.y + (pitch - mark) * 3.1f;
-                if (Mathf.Abs(y - center.y) > 100) continue;
-                float inner = mark == 0 ? 39 : 53, outer = mark == 0 ? 152 : 100;
-                Color color = mark == 0 ? FlightHudGraphics.Phosphor : new Color(.83f, .96f, .70f, .60f);
-                for (int side = -1; side <= 1; side += 2)
-                {
-                    if (mark < 0)
-                        for (float d = inner; d < outer; d += 13)
-                            FlightHudGraphics.Line(new Vector2(center.x + side * d, y), new Vector2(center.x + side * Mathf.Min(d + 7, outer), y), color);
-                    else FlightHudGraphics.Line(new Vector2(center.x + side * inner, y), new Vector2(center.x + side * outer, y), color);
-                    if (mark == 0) continue;
-                    FlightHudGraphics.Line(new Vector2(center.x + side * outer, y), new Vector2(center.x + side * outer, y + Mathf.Sign(mark) * 5), color);
-                    S.Text(new Rect(center.x + side * 121 - 15, y - 11, 30, 22), HudModel.Number(Mathf.Abs(mark)), S.HudCenter, color);
-                }
+                float y = pitch * pixelsPerDegree - mark * pixelsPerDegree;
+                if (Mathf.Abs(y) >= radius - 2) continue;
+                float halfWidth = mark == 0 ? Mathf.Sqrt(radius * radius - y * y) : (mark % 20 == 0 ? 12 : 7);
+                FlightHudGraphics.Line(new Vector2(center.x - halfWidth, center.y + y), new Vector2(center.x + halfWidth, center.y + y),
+                    mark == 0 ? FlightHudGraphics.Phosphor : Faint, mark == 0 ? 1.8f : 1.2f);
             }
+            // Bank pointer turns with the horizon against the fixed scale.
+            FlightHudGraphics.Line(new Vector2(center.x, center.y - radius + 2), new Vector2(center.x - 4, center.y - radius + 9), FlightHudGraphics.Amber, 1.6f);
+            FlightHudGraphics.Line(new Vector2(center.x, center.y - radius + 2), new Vector2(center.x + 4, center.y - radius + 9), FlightHudGraphics.Amber, 1.6f);
             GUI.matrix = previous;
-            var waterline = new Vector2(cx, 340);
-            FlightHudGraphics.Line(waterline + new Vector2(-25, 0), waterline + new Vector2(-8, 0), FlightHudGraphics.Paper, 1.8f);
-            FlightHudGraphics.Line(waterline + new Vector2(-8, 0), waterline + new Vector2(0, 6), FlightHudGraphics.Paper, 1.8f);
-            FlightHudGraphics.Line(waterline + new Vector2(0, 6), waterline + new Vector2(8, 0), FlightHudGraphics.Paper, 1.8f);
-            FlightHudGraphics.Line(waterline + new Vector2(8, 0), waterline + new Vector2(25, 0), FlightHudGraphics.Paper, 1.8f);
-            if (Aircraft.Airspeed > .8f && Aircraft.Body != null)
-            {
-                Vector3 local = Quaternion.Inverse(attitude) * Aircraft.Body.linearVelocity;
-                float yaw = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg;
-                float climb = Mathf.Atan2(local.y, new Vector2(local.x, local.z).magnitude) * Mathf.Rad2Deg;
-                // Show the velocity vector only inside the instrument field; off-field flight paths are not pinned as false targets.
-                if (Mathf.Abs(yaw) < 48 && Mathf.Abs(climb) < 30)
-                {
-                    Vector2 fpm = waterline + new Vector2(yaw * 3.1f, -climb * 3.1f);
-                    FlightHudGraphics.Circle(fpm, 7, FlightHudGraphics.Phosphor, 24);
-                    FlightHudGraphics.Line(fpm + Vector2.left * 7, fpm + Vector2.left * 17, FlightHudGraphics.Phosphor);
-                    FlightHudGraphics.Line(fpm + Vector2.right * 7, fpm + Vector2.right * 17, FlightHudGraphics.Phosphor);
-                    FlightHudGraphics.Line(fpm + Vector2.up * 7, fpm + Vector2.up * 13, FlightHudGraphics.Phosphor);
-                }
-            }
-            S.Text(new Rect(cx - 115, 462, 230, 21), hud.Input.IsFreeLooking ? "FREE LOOK" : M.Cockpit ? "COCKPIT VIEW" : "CHASE VIEW",
-                S.HudCenter, FlightHudGraphics.Muted);
+            FlightHudGraphics.Line(center + new Vector2(-18, 0), center + new Vector2(-6, 0), FlightHudGraphics.Paper, 1.8f);
+            FlightHudGraphics.Line(center + new Vector2(-6, 0), center + new Vector2(0, 5), FlightHudGraphics.Paper, 1.8f);
+            FlightHudGraphics.Line(center + new Vector2(0, 5), center + new Vector2(6, 0), FlightHudGraphics.Paper, 1.8f);
+            FlightHudGraphics.Line(center + new Vector2(6, 0), center + new Vector2(18, 0), FlightHudGraphics.Paper, 1.8f);
         }
+
+        /// <summary>Collective with the hover setting out of ground effect (amber) and, near the ground, in it (green).</summary>
+        private void DrawCollective(float x, float y, float width)
+        {
+            S.Text(new Rect(x - 5, y, width + 10, 22), M.CollectiveText, S.HudCenter);
+            var bar = new Rect(x, y + 32, width, 6);
+            S.Bar(bar, M.Collective, FlightHudGraphics.Phosphor);
+            for (int i = 0; i <= 4; i++) FlightHudGraphics.Fill(new Rect(x + i * width / 4, bar.y - 4, 1, 14), FlightHudGraphics.Muted);
+            float hoverX = x + width * Mathf.Clamp01(M.HoverCollective);
+            FlightHudGraphics.Fill(new Rect(hoverX - 1, bar.y - 8, 2, 20), FlightHudGraphics.Amber);
+            if (M.GroundEffectShown)
+            {
+                // In ground effect the hover setting is lower: label it to the left of its tick, the free-air one to the right.
+                float groundX = x + width * Mathf.Clamp01(M.HoverCollectiveInGroundEffect);
+                FlightHudGraphics.Fill(new Rect(groundX - 1, bar.y - 8, 2, 20), Green);
+                S.Text(new Rect(groundX - 64, bar.y + 12, 60, 18), "IGE", S.HudRight, Green);
+                S.Text(new Rect(hoverX + 4, bar.y + 12, 70, 18), "HOVER", S.HudSmall, FlightHudGraphics.Amber);
+            }
+            else S.Text(new Rect(hoverX - 40, bar.y + 12, 80, 18), "HOVER", S.HudCenter, FlightHudGraphics.Amber);
+        }
+
+        /// <summary>Torque (red line 100%) and rotor RPM (green 95–105%) when power limits are on.</summary>
+        private void DrawPower(float x, float y, float width)
+        {
+            Color torqueColor = M.Torque > 1f ? FlightHudGraphics.Amber : FlightHudGraphics.Phosphor;
+            S.Text(new Rect(x, y, width, 18), M.TorqueText, S.HudSmall, torqueColor);
+            var torque = new Rect(x, y + 20, width, 5);
+            S.Bar(torque, M.Torque / 1.2f, torqueColor);
+            FlightHudGraphics.Fill(new Rect(x + width / 1.2f - 1, torque.y - 4, 2, 13), Red);
+            Color rotorColor = M.RotorSpeed < 0.9f || M.RotorSpeed > 1.1f ? Red : M.RotorSpeed < 0.95f || M.RotorSpeed > 1.05f ? FlightHudGraphics.Amber : Green;
+            S.Text(new Rect(x, y + 32, width, 18), M.RotorText, S.HudSmall, rotorColor);
+            var rotor = new Rect(x, y + 52, width, 5);
+            // Scale 80–115%, with the governed band marked.
+            S.Bar(rotor, (M.RotorSpeed - 0.8f) / 0.35f, rotorColor);
+            float low = x + width * (0.95f - 0.8f) / 0.35f, high = x + width * (1.05f - 0.8f) / 0.35f;
+            FlightHudGraphics.Fill(new Rect(low, rotor.y + 7, high - low, 2), Green);
+        }
+
+        // ---- Cockpit view ----
+
+        private void DrawCockpitColumn()
+        {
+            const float x = 30;
+            S.Text(new Rect(x, 214, 156, 20), "AIR SPEED", S.HudSmall, FlightHudGraphics.Muted);
+            S.Text(new Rect(x, 232, 190, 35), M.SpeedReadout, S.HudValue);
+            S.Text(new Rect(x, 266, 200, 20), M.GroundSpeedText, S.HudSmall);
+            S.Text(new Rect(x, 292, 156, 20), "SKID AGL", S.HudSmall, FlightHudGraphics.Muted);
+            S.Text(new Rect(x, 310, 190, 35), M.HeightReadout, S.HudValue);
+            S.Text(new Rect(x, 344, 220, 20), M.VerticalSpeedLine, S.HudSmall,
+                M.VerticalSpeedCaution ? FlightHudGraphics.Amber : FlightHudGraphics.Phosphor);
+            DrawCollective(x + 8, 364, 150);
+            if (M.PowerLimits) DrawPower(Width - 130, 204, 100);
+        }
+
+        private void DrawCyclicIndicator()
+        {
+            FlightInput input = hud.Input;
+            if (!input.Settings.ShowCyclicIndicator && input.Settings.MouseMode != MouseCyclicMode.VirtualJoystick) return;
+            Vector2 center = M.Cockpit ? new Vector2(Width - 80, 300) : new Vector2(Width / 2 + 150, ClusterY);
+            FlightHudGraphics.Circle(center, 24, FlightHudGraphics.Muted);
+            FlightHudGraphics.Line(center + Vector2.left * 28, center + Vector2.right * 28, new Color(.8f, .9f, .7f, .32f));
+            FlightHudGraphics.Line(center + Vector2.up * 28, center + Vector2.down * 28, new Color(.8f, .9f, .7f, .32f));
+            Vector2 c = input.Command.Cyclic;
+            FlightHudGraphics.Circle(center + new Vector2(c.x, -c.y) * 21, 3, FlightHudGraphics.Amber, 12, 2);
+            S.Text(new Rect(center.x - 49, center.y + 30, 98, 21), input.IsFreeLooking ? "FREE LOOK" : "CYCLIC", S.HudCenter, FlightHudGraphics.Muted);
+        }
+
+        // ---- Status, chart, hover display ----
 
         private void DrawAircraftStatus()
         {
+            if (M.Cockpit) return;
             S.Box(new Rect(26, 554, 266, 123), .58f);
             FlightHudGraphics.Fill(new Rect(26, 554, 266, 1), new Color(.8f, .94f, .7f, .45f));
             S.Text(new Rect(39, 566, 242, 22), M.StatusTitle, S.HudSmall, Aircraft.Crashed ? FlightHudGraphics.Amber : FlightHudGraphics.Paper);
@@ -251,9 +297,11 @@ namespace HoverForHire
             S.Text(new Rect(39, 651, 242, 20), M.ContextLine, S.HudSmall, FlightHudGraphics.Muted);
         }
 
+        private Rect ChartFrame => new Rect(Width - 246, 429, 220, 248);
+
         private void DrawMap()
         {
-            var frame = new Rect(Width - 246, 429, 220, 248);
+            Rect frame = ChartFrame;
             S.Box(frame, .79f);
             var r = new Rect(frame.x + 9, frame.y + 31, 202, 202);
             GUI.DrawTexture(r, mapTexture);
@@ -295,6 +343,50 @@ namespace HoverForHire
             S.Text(new Rect(r.x + 8, r.yMax - 34, 70, 20), M.Units == UnitSystem.Aviation ? "0.27 nm" : "500 m", S.HudSmall, FlightHudGraphics.Muted);
         }
 
+        /// <summary>
+        /// Heading-up hover display: ground drift as a vector from the aircraft symbol, a cue where the drift is heading,
+        /// a ring at the service drift limit (green when every service condition is met) and the pad's position.
+        /// </summary>
+        private void DrawHoverDisplay()
+        {
+            Rect frame = ChartFrame;
+            S.Box(frame, .82f);
+            FlightHudGraphics.Frame(frame, new Color(.8f, .94f, .7f, .42f));
+            S.Text(new Rect(frame.x + 11, frame.y + 6, 120, 22), "HOVER  /  DRIFT", S.HudSmall);
+            S.Text(new Rect(frame.x + 110, frame.y + 6, 100, 22), M.ServiceReady ? "STEADY" : "", S.HudRight, Green);
+            var center = new Vector2(frame.center.x, frame.y + 128);
+            const float half = 92, pixelsPerMetrePerSecond = half / 3f;
+            FlightHudGraphics.Line(center + Vector2.left * half, center + Vector2.right * half, Faint);
+            FlightHudGraphics.Line(center + Vector2.up * -half, center + Vector2.up * half, Faint);
+            FlightHudGraphics.Circle(center, pixelsPerMetrePerSecond, Faint, 32);
+            FlightHudGraphics.Circle(center, 2 * pixelsPerMetrePerSecond, Faint, 40);
+            FlightHudGraphics.Circle(center, Mathf.Max(4f, M.ServiceSpeed * pixelsPerMetrePerSecond), M.ServiceReady ? Green : FlightHudGraphics.Muted, 32, 1.6f);
+            if (M.PadVisible)
+            {
+                float distance = M.PadOffset.magnitude;
+                Vector2 direction = distance > 0.01f ? new Vector2(M.PadOffset.x, -M.PadOffset.y) / distance : Vector2.zero;
+                // Compressed range: fine near the pad, still on the display at 60 m.
+                Vector2 pad = center + direction * (half * distance / (distance + 12f));
+                FlightHudGraphics.Line(center, pad, new Color(1, .76f, .35f, .35f));
+                FlightHudGraphics.Diamond(pad, 7, FlightHudGraphics.Amber);
+            }
+            Vector2 drift = Clamp(new Vector2(M.Drift.x, -M.Drift.y) * pixelsPerMetrePerSecond, half);
+            Vector2 trend = Clamp(new Vector2(M.DriftTrend.x, -M.DriftTrend.y) * pixelsPerMetrePerSecond, half);
+            if (drift.sqrMagnitude > 4f)
+            {
+                FlightHudGraphics.Line(center, center + drift, FlightHudGraphics.Paper, 2f);
+                Vector2 unit = drift.normalized, side = new Vector2(-unit.y, unit.x);
+                FlightHudGraphics.Line(center + drift, center + drift - unit * 7 + side * 4, FlightHudGraphics.Paper, 2f);
+                FlightHudGraphics.Line(center + drift, center + drift - unit * 7 - side * 4, FlightHudGraphics.Paper, 2f);
+            }
+            FlightHudGraphics.Circle(center + trend, 4, FlightHudGraphics.Phosphor, 16, 1.6f);
+            FlightHudGraphics.Aircraft(center, 0f, FlightHudGraphics.Paper, .85f);
+            S.Text(new Rect(frame.x + 11, frame.yMax - 26, 120, 20), M.DriftText, S.HudSmall, M.ServiceReady ? Green : FlightHudGraphics.Phosphor);
+            S.Text(new Rect(frame.x + 110, frame.yMax - 26, 100, 20), M.PadText, S.HudRight, FlightHudGraphics.Amber);
+        }
+
+        private static Vector2 Clamp(Vector2 value, float radius) => Vector2.ClampMagnitude(value, radius);
+
         private static Vector2 MapPosition(Rect rect, Vector3 position)
             => new Vector2(Mathf.Clamp(rect.center.x + position.x / 2400 * rect.width, rect.x + 9, rect.xMax - 9),
                 Mathf.Clamp(rect.center.y - position.z / 2400 * rect.height, rect.y + 9, rect.yMax - 9));
@@ -327,6 +419,8 @@ namespace HoverForHire
             return texture;
         }
 
+        // ---- Target, warnings, crash, debug ----
+
         private void DrawTarget()
         {
             LandingZone zone = Missions.TargetZone;
@@ -357,6 +451,32 @@ namespace HoverForHire
             S.Text(new Rect(labelX, labelY, 216, 21), M.TargetName, S.HudCenter, FlightHudGraphics.Amber);
             S.Text(new Rect(labelX, labelY + 22, 216, 21), point.z < 0 ? M.TargetDistanceBehind : M.TargetDistance, S.HudCenter, FlightHudGraphics.Paper);
             if (Missions.DwellProgress > 0) S.Bar(new Rect(labelX + 53, labelY + 47, 110, 3), Missions.DwellProgress, FlightHudGraphics.Amber);
+        }
+
+        /// <summary>Caution stack under the compass; returns the y below it for the next notice.</summary>
+        private float DrawWarnings()
+        {
+            float y = 146;
+            foreach (HudModel.Warning warning in M.Warnings)
+            {
+                var r = new Rect(Width / 2 - 170, y, 340, 26);
+                S.Box(r, .8f);
+                FlightHudGraphics.Fill(new Rect(r.x, r.y, 3, r.height), warning.Color);
+                S.Text(new Rect(r.x, r.y + 2, r.width, 22), warning.Text, S.HudCenter, warning.Color);
+                y += 30;
+            }
+            return y;
+        }
+
+        private void DrawCrashPanel()
+        {
+            var r = new Rect(Width / 2 - 255, 248, 510, 190);
+            S.Box(r, .97f);
+            FlightHudGraphics.Fill(new Rect(r.x, r.y, r.width, 3), FlightHudGraphics.Amber);
+            GUI.Label(new Rect(r.x + 24, r.y + 18, 462, 38), M.CrashTitle, S.Title);
+            GUI.Label(new Rect(r.x + 24, r.y + 58, 462, 26), M.CrashDetail, S.Label);
+            GUI.Label(new Rect(r.x + 24, r.y + 86, 462, 44), M.CrashAdvice, S.Small);
+            if (GUI.Button(new Rect(r.x + 24, r.y + 132, 462, 44), M.RetryLabel, S.Button)) hud.Retry();
         }
 
         private void DrawDebug()

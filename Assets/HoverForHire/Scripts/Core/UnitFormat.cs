@@ -34,9 +34,31 @@ namespace HoverForHire
         public static string FormatSpeed(float metresPerSecond, UnitSystem units)
             => $"{Speed(metresPerSecond, units):0} {SpeedUnit(units)}";
 
-        /// <summary>Slow speeds that matter to the tenth, e.g. a drift or touchdown: "0.8 m/s" or "160 ft/min".</summary>
+        /// <summary>A vertical rate that matters to the tenth, e.g. a touchdown or sink: "0.8 m/s" or "160 ft/min".</summary>
         public static string FormatSlowSpeed(float metresPerSecond, UnitSystem units)
-            => units == UnitSystem.Aviation ? $"{metresPerSecond * FeetPerMinutePerMetrePerSecond:0} ft/min" : $"{metresPerSecond:0.0} m/s";
+            => units == UnitSystem.Aviation ? $"{RoundFeetPerMinute(metresPerSecond):0} ft/min" : $"{metresPerSecond:0.0} m/s";
+
+        /// <summary>A vertical-rate band, e.g. "5–7 m/s" or "980–1380 ft/min".</summary>
+        public static string FormatVerticalBand(float low, float high, UnitSystem units)
+            => units == UnitSystem.Aviation ? $"{RoundFeetPerMinute(low):0}–{RoundFeetPerMinute(high):0} ft/min" : $"{low:0}–{high:0} m/s";
+
+        /// <summary>A slow horizontal drift in the airspeed units, to the tenth: "2.9 km/h" or "1.6 kt".</summary>
+        public static string FormatDriftSpeed(float metresPerSecond, UnitSystem units)
+            => $"{Speed(metresPerSecond, units):0.0} {SpeedUnit(units)}";
+
+        /// <summary>A horizontal speed band, e.g. "29–79 km/h" or "16–43 kt".</summary>
+        public static string FormatSpeedBand(float low, float high, UnitSystem units)
+            => $"{Speed(low, units):0}–{Speed(high, units):0} {SpeedUnit(units)}";
+
+        /// <summary>A round height for instructions, e.g. "25 m" or "82 ft".</summary>
+        public static string FormatRoundHeight(float metres, UnitSystem units)
+            => units == UnitSystem.Aviation ? $"{metres / MetresPerFoot:0} ft" : $"{metres:0} m";
+
+        /// <summary>A short distance to the tenth of a metre (feet are whole), e.g. "2.3 m" or "8 ft".</summary>
+        public static string FormatShortDistance(float metres, UnitSystem units)
+            => units == UnitSystem.Aviation ? $"{metres / MetresPerFoot:0} ft" : $"{metres:0.0} m";
+
+        private static float RoundFeetPerMinute(float metresPerSecond) => Mathf.Round(metresPerSecond * FeetPerMinutePerMetrePerSecond / 10f) * 10f;
 
         /// <summary>Signed vertical speed, e.g. "+1.2 m/s" or "-240 ft/min".</summary>
         public static string FormatVerticalSpeed(float metresPerSecond, UnitSystem units)

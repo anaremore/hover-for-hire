@@ -81,6 +81,11 @@ namespace HoverForHire
             bool engineFailed=game.Aircraft.EngineFailed&&!game.Aircraft.Crashed;
             Command=new PilotCommand(Vector2.zero,0,.2f);
             yield return new WaitForSeconds(1);yield return Capture("08c-engine-failure.png");
+            // Crosswind drill in aviation units: wind indicator, hover display and unit conversion in one frame.
+            UnitSystem units=hud.Settings.Units;hud.SetUnits(UnitSystem.Aviation);
+            game.Missions.StartTraining(TrainingSession.Crosswind);Command=PilotCommand.Neutral;
+            yield return new WaitForSeconds(2f);yield return Capture("08d-crosswind-aviation.png");
+            hud.SetUnits(units);
             game.Missions.StartFreeFlight();Command=PilotCommand.Neutral;yield return new WaitForSeconds(1.5f);
             // Scripted 0.49 then 0.47 collective: heave damping should settle near 2 m/s and peak around 18 m.
             // Both bounds matter: a regression toward the old runaway climb (54 m) fails as surely as a weak one.

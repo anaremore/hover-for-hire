@@ -16,6 +16,8 @@ namespace HoverForHire
         public string AssistSnapshot = "";
         /// <summary>The player's chosen realism. Drills layer their required effects on a copy of it.</summary>
         public RealismSettings PlayerRealism = new RealismSettings();
+        /// <summary>Display units for objectives and feedback; the HUD sets it from the pilot's settings.</summary>
+        public UnitSystem Units = UnitSystem.Metric;
         /// <summary>Shared island wind, configured from realism (null in fixtures without wind).</summary>
         public WindField Wind;
         [Tooltip("Prevailing wind direction (meteorological, degrees) when realism enables wind.")]
@@ -100,7 +102,7 @@ namespace HoverForHire
             {
                 if (Mode == GameMode.FreeFlight) return "No timer · no payload · reset returns to home base";
                 if (Mode == GameMode.Training)
-                    return CurrentTraining == null ? "Seven short drills, with immediate retries."
+                    return CurrentTraining == null ? $"{TrainingSession.Names.Length} short drills, with immediate retries."
                         : CurrentTraining.State == TrainingState.Complete ? $"DRILL COMPLETE · {CurrentTraining.Result.Grade} · {CurrentTraining.Feedback}"
                         : CurrentTraining.State == TrainingState.Failed ? "RETRY · " + CurrentTraining.Feedback : CurrentTraining.Feedback;
                 if (ShiftFinished) return "Start another shift or return to free flight. Completed earnings are saved.";
@@ -111,7 +113,7 @@ namespace HoverForHire
                 if (CurrentMission.State == HoverForHire.MissionState.Delivered) return CurrentMission.Result.Feedback;
                 if (CurrentMission.DwellSeconds > 0f)
                     return $"{(CurrentMission.State == HoverForHire.MissionState.Transport ? "Unloading" : "Loading")} · hold steady {CurrentMission.DwellSeconds:0.0}/{CurrentMission.Contract.DwellSeconds:0.0}s";
-                return $"Land inside the pad · speed ≤ {CurrentMission.Contract.MaximumGroundSpeed:0.0} m/s · level · hold {CurrentMission.Contract.DwellSeconds:0}s";
+                return $"Land inside the pad · speed ≤ {UnitFormat.FormatDriftSpeed(CurrentMission.Contract.MaximumGroundSpeed, Units)} · level · hold {CurrentMission.Contract.DwellSeconds:0}s";
             }
         }
 
@@ -243,7 +245,7 @@ namespace HoverForHire
                     break;
             }
             if (index == TrainingSession.HeavyLift) Aircraft.SetPayload(Aircraft.Tuning.MaximumPayloadKg);
-            CurrentTraining = new TrainingSession(index, HomeZone.Definition, 0f, ActiveAssists(), target != null ? target.Definition : (ZoneDefinition?)null);
+            CurrentTraining = new TrainingSession(index, HomeZone.Definition, 0f, ActiveAssists(), target != null ? target.Definition : (ZoneDefinition?)null, Units);
             FeedbackEvent?.Invoke("Training · " + TrainingName);
         }
 
@@ -425,7 +427,7 @@ namespace HoverForHire
             {
                 ContractDefinition contract = contracts[nextContract++ % contracts.Count];
                 if (CompletedDeliveries < contract.RequiredDeliveries) continue;
-                CurrentMission = new MissionSession(contract);
+                CurrentMission = new MissionSession(contract) { Units = Units };
                 return;
             }
             CurrentMission = null;

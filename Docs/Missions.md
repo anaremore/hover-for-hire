@@ -24,6 +24,8 @@ A service dwell requires all of the following continuously:
 - Ground speed ≤0.8 m/s, absolute vertical speed ≤0.5 m/s and tilt ≤8°.
 - Three seconds without a failed condition. Advanced jobs tighten ground speed to 0.5 m/s, tilt to 6° and dwell to four seconds.
 
+Near a pad the HUD's hover display replaces the chart. It shows ground drift and its trend, the pad's position and a ring at the drift limit. The ring turns green when ground speed, vertical speed and tilt are all within the service limits. In a shift, a job clock shows elapsed time against the job's target time.
+
 Any failed condition resets the dwell. Flyovers and brief collisions cannot load or deliver. Pickup applies payload mass; delivery, failure, mode change and reset clear it. A retry starts a fresh attempt at the pickup, requiring loading again. A completed attempt can be claimed only once, and retry cannot reopen it.
 
 Scores weight elapsed time (30%), pad placement (25%), worst loaded touchdown speed (25%) and passenger comfort or cargo condition (20%). Routine acceleration is free; sustained harsh acceleration, high rotation rates and large bank angles reduce comfort. Strong acceleration and impacts reduce cargo condition. Grades are A ≥90, B ≥78, C ≥62, otherwise D. Payment is base pay multiplied by 0.65–1.30 according to score. Feedback identifies the most useful improvement. There are no sling loads or walking passengers.

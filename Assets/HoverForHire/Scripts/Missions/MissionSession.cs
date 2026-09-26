@@ -89,6 +89,8 @@ namespace HoverForHire
     public sealed class MissionSession
     {
         public ContractDefinition Contract { get; }
+        /// <summary>Units for feedback text. Limits and scoring stay in SI.</summary>
+        public UnitSystem Units { get; set; }
         public MissionState State { get; private set; } = MissionState.Available;
         public string AttemptId { get; private set; }
         public float ElapsedSeconds { get; private set; }
@@ -214,7 +216,7 @@ namespace HoverForHire
                 Seconds = ElapsedSeconds, AccuracyMetres = accuracy, TouchdownMetresPerSecond = LandingSpeed,
                 ComfortPercent = Comfort, CargoConditionPercent = CargoCondition,
                 Assists = AssistSnapshot, CompletedUtc = DateTime.UtcNow.ToString("O"),
-                Feedback = landingScore < 0.65f ? "Reduce descent below 1 m/s before the skids touch."
+                Feedback = landingScore < 0.65f ? $"Reduce descent below {UnitFormat.FormatSlowSpeed(1f, Units)} before the skids touch."
                     : precisionScore < 0.6f ? "Pause in a low hover over the pad center before descending."
                     : handlingScore < 0.8f ? "Use smaller cyclic corrections and begin braking earlier."
                     : timeScore < 0.8f ? "Plan a direct route, then leave space for a controlled approach."

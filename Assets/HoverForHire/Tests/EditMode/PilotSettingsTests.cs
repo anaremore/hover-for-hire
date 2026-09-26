@@ -42,6 +42,20 @@ namespace HoverForHire.Tests
         }
 
         [Test]
+        public void DrillAndCrashTextFollowTheChosenUnits()
+        {
+            var home = new ZoneDefinition { Id = "home", Radius = 17f };
+            var metric = new TrainingSession(3, home, 0f, "RATE");
+            Assert.That(metric.Objective, Does.Contain("km/h").And.Contain(" m "), metric.Objective);
+            var aviation = new TrainingSession(3, home, 0f, "RATE", null, UnitSystem.Aviation);
+            Assert.That(aviation.Objective, Does.Contain(" ft").And.Contain(" kt").And.Not.Contain("m/s"), aviation.Objective);
+            var settling = new TrainingSession(TrainingSession.SettlingWithPower, home, 0f, "RATE", null, UnitSystem.Aviation);
+            Assert.That(settling.Objective, Does.Contain("ft/min"), settling.Objective);
+            Assert.That(CrashReport.Detail(CrashCause.HardLanding, 7.24f, 5.5f, "", UnitSystem.Aviation), Does.Contain("ft/min"));
+            Assert.That(CrashReport.Advice(CrashCause.RotorStrike, UnitSystem.Aviation), Does.Contain("15 ft"));
+        }
+
+        [Test]
         public void FreshInstallGetsDefaultsWithoutWriting()
         {
             var storage = new MemoryStorage();

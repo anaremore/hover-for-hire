@@ -37,6 +37,7 @@ namespace HoverForHire
             Settings = PilotSettingsStore.Load(storage);
             Aircraft.Assists = Settings.Assists;
             Missions.PlayerRealism = Settings.Realism;
+            Missions.Units = Settings.Units;
             Audio.Volume = Settings.Volume;
             firstRun = !Settings.FirstRunComplete;
             Model = new HudModel(this);
@@ -119,6 +120,15 @@ namespace HoverForHire
             Input.SaveSettings();
         }
 
+        /// <summary>Switch display units; objectives already shown keep theirs until the next drill or job.</summary>
+        public void SetUnits(UnitSystem units)
+        {
+            Settings.Units = units;
+            Missions.Units = units;
+            if (Missions.CurrentMission != null) Missions.CurrentMission.Units = units;
+            Save();
+        }
+
         /// <summary>Apply edited realism outside drills (drills layer their own effects) and remember it.</summary>
         public void ApplyRealismChange()
         {
@@ -165,8 +175,9 @@ namespace HoverForHire
 
         private void OnSystemFailure(SystemFailure failure)
         {
+            UnitSystem units = Settings != null ? Settings.Units : UnitSystem.Metric;
             Notify(failure == SystemFailure.EngineOut
-                ? "ENGINE FAILURE. Lower collective now: autorotate, hold 20–25 m/s, flare near 30 m."
+                ? $"ENGINE FAILURE. Lower collective now: autorotate, hold {UnitFormat.FormatSpeedBand(20f, 25f, units)}, flare near {UnitFormat.FormatRoundHeight(30f, units)}."
                 : "TAIL ROTOR FAILURE. Reduce collective to cut torque; keep forward speed and land running.", 8f);
         }
 

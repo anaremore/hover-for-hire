@@ -20,13 +20,15 @@ namespace HoverForHire
             }
         }
 
-        public static string Detail(CrashCause cause, float value, float limit, string obstacle)
+        public static string Detail(CrashCause cause, float value, float limit, string obstacle, UnitSystem units = UnitSystem.Metric)
         {
             switch (cause)
             {
-                case CrashCause.HardLanding: return $"Touchdown at {value:0.0} m/s. The limit is {limit:0.0} m/s.";
+                case CrashCause.HardLanding:
+                    return $"Touchdown at {UnitFormat.FormatSlowSpeed(value, units)}. The limit is {UnitFormat.FormatSlowSpeed(limit, units)}.";
                 case CrashCause.TipOver: return $"Tilted {value:0}° while on the ground. The limit is {limit:0}°.";
-                case CrashCause.ObstacleImpact: return $"Hit {Describe(obstacle)} at {value:0.0} m/s. The limit is {limit:0.0} m/s.";
+                case CrashCause.ObstacleImpact:
+                    return $"Hit {Describe(obstacle)} at {UnitFormat.FormatSpeed(value, units)}. The limit is {UnitFormat.FormatSpeed(limit, units)}.";
                 case CrashCause.RotorStrike: return $"The main rotor struck {Describe(obstacle)}.";
                 case CrashCause.TailRotorStrike: return $"The tail rotor struck {Describe(obstacle)}.";
                 case CrashCause.Ditching: return "The skids went into the sea.";
@@ -35,14 +37,14 @@ namespace HoverForHire
             }
         }
 
-        public static string Advice(CrashCause cause)
+        public static string Advice(CrashCause cause, UnitSystem units = UnitSystem.Metric)
         {
             switch (cause)
             {
-                case CrashCause.HardLanding: return "Arrive in a steady hover, then lower collective until the descent is under 1 m/s.";
+                case CrashCause.HardLanding: return $"Arrive in a steady hover, then lower collective until the descent is under {UnitFormat.FormatSlowSpeed(1f, units)}.";
                 case CrashCause.TipOver: return "Touch down level with no sideways drift; drift and slopes roll the aircraft over.";
                 case CrashCause.ObstacleImpact: return "Slow down near structures and keep clear of the ground.";
-                case CrashCause.RotorStrike: return "Keep the rotor disc clear: the blades reach 4.6 m from the mast.";
+                case CrashCause.RotorStrike: return $"Keep the rotor disc clear: the blades reach {UnitFormat.FormatShortDistance(4.62f, units)} from the mast.";
                 case CrashCause.TailRotorStrike: return "The tail sits low behind you: avoid nose-high flares close to the ground.";
                 case CrashCause.Ditching: return "Watch skid height over water; the sea is below the shoreline.";
                 default: return "Reset at the pad and try a slower approach.";

@@ -1,6 +1,39 @@
 # Validation and playtest checklist
 
-Status snapshot: **26 September 2026, Unity 6000.3.22f1** (phase 3 of the 0.3 overhaul; the 0.2.0 and 0.1.0 sections below are kept as the baseline). The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
+Status snapshot: **26 September 2026, Unity 6000.3.22f1** (phase 4 of the 0.3 overhaul; the 0.2.0 and 0.1.0 sections below are kept as the baseline). The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
+
+## HUD, units and presentation refactor (0.3 development, phase 4)
+
+**26 September 2026.**
+
+**Refactor.** The 670-line HUD component was split into five parts:
+- a coordinator;
+- a per-frame model, which formats every value and string once per frame instead of once per IMGUI event;
+- the instruments view;
+- the Flight Desk menu;
+- shared styles.
+
+The pilot's settings (assists, realism, units, volume, first launch) now live under one versioned key, with a one-time migration from the 0.2 keys.
+
+**Redesigned chase-view HUD.** The layout now keeps the aircraft clear:
+- **Tapes** move outward, with ground speed and vertical speed beside them. Airspeed is now horizontal speed through the air.
+- **Bottom cluster:** the pitch ladder and view label are gone. A compact attitude indicator, the collective gauge (free-air and in-ground-effect hover marks) and the torque and rotor-RPM gauges sit here instead.
+- **Hover display:** near a pad, a heading-up display replaces the chart. It shows the drift vector, a trend cue, a service ring that turns green when the landing would count, and the pad's position.
+- **Readouts:** a wind arrow with speed and recent peak, and a job clock against the job's target time.
+- **Placement:** warnings and notices stack under the compass. The cockpit view keeps its readouts in the left column, above the instrument panel.
+- **Units:** Metric or Aviation throughout, including drill objectives, feedback, mission status and crash reports.
+
+**Tests.** **103 EditMode** and **57 PlayMode** tests passed. The new `PilotSettingsTests` cover:
+- conversion and formatting;
+- drill and crash text in both unit systems;
+- migration from the old keys;
+- round trip and sanitizing.
+
+**Screenshot review** (60 fps smoke, 1600×900). The review covered the free-flight chase and cockpit views, the autorotation drill with engine failure and power gauges, and a crosswind drill in Aviation units. It found and fixed two bugs:
+- the collective gauge's legend overflowed into the attitude indicator;
+- the engine-failure notice still said m/s.
+
+The re-run confirmed the fixes: IGE and HOVER labels either side of their marks, and "hold 72–90 km/h, flare near 30 m".
 
 ## Arma-style realism (0.3 development, phase 3)
 
