@@ -29,7 +29,7 @@ namespace HoverForHire
         public float FlightSeconds { get; private set; }
 
         private const float SkidOffset = 1.5f;
-        private Vector3 start;
+        private Vector3 start, windTrim;
         private float trim, touchdownTime;
         private float? holdHeading;
 
@@ -40,6 +40,7 @@ namespace HoverForHire
             start = Aircraft.Body.position;
             Current = Phase.Climb;
             trim = 0f;
+            windTrim = Vector3.zero;
             holdHeading = null;
             TouchdownSpeed = 0f;
             FlightSeconds = 0f;
@@ -84,7 +85,12 @@ namespace HoverForHire
                 if (Current == Phase.Descend || Current == Phase.Touchdown) speed = Mathf.Min(speed, 0.6f * distance);
                 desiredVelocity = horizontal / distance * speed;
             }
-            Vector3 acceleration = Vector3.ClampMagnitude((desiredVelocity - new Vector3(velocity.x, 0f, velocity.z)) * 0.6f, 3f);
+            Vector3 velocityError = desiredVelocity - new Vector3(velocity.x, 0f, velocity.z);
+            // Near the pad an integral trim finds the lean a steady wind needs; proportional control alone
+            // would balance wind drag against lean some distance downwind of the pad.
+            if (Current != Phase.Climb && Current != Phase.Cruise && distance < 12f)
+                windTrim = Vector3.ClampMagnitude(windTrim + velocityError * 0.3f * dt, 2.5f);
+            Vector3 acceleration = Vector3.ClampMagnitude(velocityError * 0.6f + windTrim, 3f);
 
             float heading = Aircraft.Heading, desiredHeading;
             if ((Current == Phase.Cruise || Current == Phase.Approach) && distance > 30f)

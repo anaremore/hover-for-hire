@@ -90,6 +90,93 @@ namespace HoverForHire
         /// <summary>Passive rotor and airframe damping about one body axis, N·m per rad/s (0 pitch, 1 yaw, 2 roll).</summary>
         public static float PassiveRateDamping(int axis, Vector3 inertiaKgM2, FlightTuning tuning)
             => Mathf.Max(0f, tuning.RotorRateDampingPerSecond[axis]) * inertiaKgM2[axis] + Mathf.Max(0f, tuning.AngularDrag[axis]);
+
+        private static float Smooth01(float value) { float t = Mathf.Clamp01(value); return t * t * (3f - 2f * t); }
+        private static float SmoothBand(float from, float to, float value) => Smooth01((value - from) / Mathf.Max(0.0001f, to - from));
+
+        /// <summary>
+        /// Ground-effect thrust factor from the rotor hub's height above the surface below (Cheeseman–Bennett,
+        /// capped), fading out with horizontal airspeed. 1 means no effect.
+        /// </summary>
+        public static float GroundEffectFactor(float hubHeightAboveSurface, float horizontalAirspeed, FlightTuning tuning)
+        {
+            float gain = Mathf.Max(0f, tuning.GroundEffectMaximumGain);
+            if (gain <= 0f) return 1f;
+            float radius = Mathf.Max(0.5f, tuning.MainRotorRadius), height = Mathf.Max(0.01f, hubHeightAboveSurface);
+            float ratio = radius / (4f * height);
+            float cheesemanBennett = ratio >= 0.99f ? 1f + gain : Mathf.Min(1f + gain, 1f / (1f - ratio * ratio));
+            return 1f + (cheesemanBennett - 1f) * (1f - SmoothBand(0f, tuning.GroundEffectFadeSpeed, horizontalAirspeed));
+        }
+
+        /// <summary>Thrust factor from effective translational lift: rises across the transition speed band.</summary>
+        public static float TranslationalLiftFactor(float horizontalAirspeed, FlightTuning tuning)
+            => 1f + Mathf.Max(0f, tuning.TranslationalLiftGain)
+                * SmoothBand(tuning.TranslationalLiftStart, tuning.TranslationalLiftFull, horizontalAirspeed);
+
+        /// <summary>0..1 shudder through the translational-lift transition, peaking mid-band.</summary>
+        public static float TranslationalBuffet(float horizontalAirspeed, FlightTuning tuning)
+        {
+            float u = Mathf.InverseLerp(tuning.TranslationalLiftStart, tuning.TranslationalLiftFull, horizontalAirspeed);
+            return u <= 0f || u >= 1f ? 0f : 4f * u * (1f - u);
+        }
+
+        /// <summary>
+        /// Settling-with-power severity 0..1: a powered rotor descending into its own downwash at low airspeed.
+        /// An autorotating rotor has upward inflow and barely enters it.
+        /// </summary>
+        public static float VortexRingSeverity(float descentThroughAir, float horizontalAirspeed, float collective,
+            bool engineDriven, float onsetScale, FlightTuning tuning)
+        {
+            float scale = Mathf.Clamp(onsetScale, 0.5f, 1.5f);
+            float descent = SmoothBand(tuning.VortexRingOnset * scale, tuning.VortexRingFull * scale, descentThroughAir);
+            float lowSpeed = 1f - SmoothBand(5f, 12f, horizontalAirspeed);
+            float power = SmoothBand(0.25f, 0.4f, collective);
+            return descent * lowSpeed * power * (engineDriven ? 1f : 0.15f);
+        }
+
+        /// <summary>
+        /// Fraction of thrust lost in a vortex ring. Up to the hover collective it is the tuned loss; collective beyond
+        /// hover only feeds the ring, so the loss grows and pulling power makes the sink worse, as in the real aircraft.
+        /// </summary>
+        public static float VortexRingThrustLoss(float severity, float collective, float hoverCollective, FlightTuning tuning)
+        {
+            float excess = Mathf.Max(0f, collective / Mathf.Max(0.05f, hoverCollective) - 1f);
+            return Mathf.Min(tuning.VortexRingMaximumLoss,
+                Mathf.Max(0f, tuning.VortexRingThrustLoss) * Mathf.Clamp01(severity) * (1f + Mathf.Max(0f, tuning.VortexRingGrowth) * excess));
+        }
+
+        /// <summary>Rotor thrust collapses as blades stall below the minimum rotor speed.</summary>
+        public static float RotorStallFactor(float rotorSpeed01, FlightTuning tuning)
+            => SmoothBand(tuning.RotorStallSpeed01 - 0.05f, tuning.RotorStallSpeed01 + 0.05f, rotorSpeed01);
+
+        public static float GovernedOmega(FlightTuning tuning) => Mathf.Max(1f, tuning.GovernedRotorRpm) * Mathf.PI / 30f;
+
+        /// <summary>Induced velocity (m/s) from momentum theory, reduced with edgewise airspeed (Glauert, level flight).</summary>
+        public static float InducedVelocity(float thrust, float edgewiseAirspeed, FlightTuning tuning)
+        {
+            float area = Mathf.PI * tuning.MainRotorRadius * tuning.MainRotorRadius;
+            float hover = Mathf.Sqrt(Mathf.Max(1f, thrust) / (2f * Mathf.Max(0.1f, tuning.AirDensity) * area));
+            float x = edgewiseAirspeed / hover;
+            x *= x;
+            return hover * Mathf.Sqrt(Mathf.Max(0f, -0.5f * x + Mathf.Sqrt(0.25f * x * x + 1f)));
+        }
+
+        /// <summary>
+        /// Rotor power required (W): induced plus axial-flow power over the figure of merit, plus profile power.
+        /// Axial airspeed is positive along the thrust (climbing); upflow in a descent or flare makes it negative,
+        /// which lowers the power and can drive the rotor (autorotation).
+        /// </summary>
+        public static float PowerRequired(float thrust, float edgewiseAirspeed, float axialAirspeed, float rotorSpeed01, FlightTuning tuning)
+        {
+            float omega = GovernedOmega(tuning) * Mathf.Max(0.05f, rotorSpeed01);
+            float advance = edgewiseAirspeed / (omega * Mathf.Max(0.5f, tuning.MainRotorRadius));
+            float profile = tuning.ProfilePowerW * (1f + 4.65f * advance * advance) * rotorSpeed01 * rotorSpeed01 * rotorSpeed01;
+            float induced = InducedVelocity(thrust, edgewiseAirspeed, tuning);
+            return Mathf.Max(1f, thrust) * (induced + axialAirspeed) / Mathf.Max(0.3f, tuning.FigureOfMerit) + profile;
+        }
+
+        /// <summary>Torque (N·m) at 100% engine rating and governed rotor speed.</summary>
+        public static float RatedTorque(FlightTuning tuning) => tuning.EngineRatedPowerW / GovernedOmega(tuning);
     }
 
     /// <summary>

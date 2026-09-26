@@ -4,10 +4,17 @@ namespace HoverForHire
 {
     public enum TrainingState { Active, Complete, Failed }
 
-    /// <summary>Seven outcome-based drills, using the same observations as normal flight.</summary>
+    /// <summary>
+    /// Outcome-based drills using the same observations as normal flight. Drills 1–7 teach basic handling;
+    /// 8–12 teach the realism skills: crosswind, power management, settling with power, autorotation, confined areas.
+    /// </summary>
     public sealed class TrainingSession
     {
-        public static readonly string[] Names = { "Takeoff", "Hover", "Yaw control", "Forward flight", "Braking", "Approach", "Precision landing" };
+        public static readonly string[] Names = { "Takeoff", "Hover", "Yaw control", "Forward flight", "Braking", "Approach", "Precision landing",
+            "Crosswind landing", "Heavy lift", "Settling with power", "Autorotation", "Confined area" };
+        public const int Crosswind = 7, HeavyLift = 8, SettlingWithPower = 9, Autorotation = 10, ConfinedArea = 11;
+        /// <summary>Set by the autorotation drill once the engine should fail; the director applies it to the aircraft.</summary>
+        public bool RequestEngineFailure { get; private set; }
         public int Index { get; }
         public TrainingState State { get; private set; } = TrainingState.Active;
         public int Stage { get; private set; }
@@ -24,15 +31,18 @@ namespace HoverForHire
         public string Feedback { get; private set; }
         public string Assists { get; private set; }
         public ChallengeResult Result { get; private set; }
-        private readonly ZoneDefinition home;
+        private readonly ZoneDefinition home, reference;
         private readonly float forwardX, forwardZ, targetHeading;
         private float errorIntegral, headingIntegral, measuredSeconds, brakeX, brakeZ, brakingDistance;
+        private float peakTorque, lowRotorSeconds, rotorOutsideSeconds, entryAltitude, lowestAfterEntry = float.MaxValue;
         private bool claimed;
 
-        public TrainingSession(int index, ZoneDefinition home, float heading, string assists)
+        /// <param name="target">Landing reference for drills away from home (the confined-area pad); home otherwise.</param>
+        public TrainingSession(int index, ZoneDefinition home, float heading, string assists, ZoneDefinition? target = null)
         {
-            Index = Math.Max(0, Math.Min(6, index));
+            Index = Math.Max(0, Math.Min(Names.Length - 1, index));
             this.home = home;
+            reference = target ?? home;
             forwardX = (float)Math.Sin(heading * Math.PI / 180.0);
             forwardZ = (float)Math.Cos(heading * Math.PI / 180.0);
             targetHeading = (heading + 90f) % 360f;
@@ -46,7 +56,15 @@ namespace HoverForHire
                 case 3: SetTarget(110f, 15f); Objective = "Climb above 6 m, fly 100 m forward at 8–22 m/s, then hold steady for 3 seconds."; break;
                 case 4: SetTarget(100f, 15f); Objective = "Climb above 6 m and accelerate to 12 m/s to begin the braking drill."; break;
                 case 5: SetTarget(100f, 18f); Objective = "Climb above 12 m and depart at least 80 m from the pad, then return to land."; break;
-                default: SetTarget(30f, 10f); Objective = "Climb above 5 m and move 20 m from the pad, then return for a center landing."; break;
+                case 6: SetTarget(30f, 10f); Objective = "Climb above 5 m and move 20 m from the pad, then return for a center landing."; break;
+                case Crosswind: Objective = "Crosswind: hover at 8–12 m within 6 m of pad center for 8 seconds. Lean into the wind."; break;
+                case HeavyLift: SetTarget(0f, 25f); Objective = "Maximum load: lift off gently and climb to 25 m. Keep torque under 110% and rotor RPM above 95%."; break;
+                case SettlingWithPower: Objective = "Slow to a hover, then lower collective until you sink at 5–7 m/s with no forward speed. Recognise the settling."; break;
+                case Autorotation: Objective = "Cruise straight ahead. Be ready: the engine will fail."; break;
+                default:
+                    Stage = 1;
+                    Objective = "Confined area: land on the pad inside the cutting within 3 m of center. Keep the rotor clear of the slopes.";
+                    break;
             }
             Feedback = "Use small inputs. Collective holds its setting when released.";
         }
@@ -59,7 +77,8 @@ namespace HoverForHire
 
         public void RecordTouchdown(float speed)
         {
-            if (Stage > 0 && State == TrainingState.Active) TouchdownSpeed = Math.Max(TouchdownSpeed, Math.Abs(speed));
+            bool landingPhase = Stage > 0 || Index == Autorotation && RequestEngineFailure;
+            if (landingPhase && State == TrainingState.Active) TouchdownSpeed = Math.Max(TouchdownSpeed, Math.Abs(speed));
         }
 
         public void Fail(string reason)
@@ -76,9 +95,9 @@ namespace HoverForHire
             if (sample.Crashed) { Fail("Aircraft damaged. Retry, then reduce descent and use smaller corrections."); return; }
             ElapsedSeconds += dt;
             if (ElapsedSeconds > 300f) { Fail("Drill paused after 5 minutes. Retry and focus on the displayed target."); return; }
-            PositionError = home.HorizontalDistance(sample);
+            PositionError = reference.HorizontalDistance(sample);
             HeadingError = Math.Abs(DeltaAngle(sample.Heading, targetHeading));
-            float bodyHeight = sample.Y - home.Y;
+            float bodyHeight = sample.Y - reference.Y;
             // Match the modeled 1.5 m origin-to-skid clearance and the HUD's skid AGL units.
             float altitude = bodyHeight - 1.5f;
             if (!sample.Grounded && altitude > 3f && Index <= 2)
@@ -143,6 +162,81 @@ namespace HoverForHire
                         : sample.GroundSpeed > 2f ? $"{sample.GroundSpeed:0.0} m/s. Apply aft cyclic, then level before you drift backward."
                         : "Center cyclic as speed falls. Adjust collective to arrest the climb or descent.";
                     break;
+                case Crosswind:
+                    if (Stage == 0)
+                    {
+                        required = 8f;
+                        stable = !sample.Grounded && altitude >= 8f && altitude <= 12f && PositionError <= 6f
+                            && sample.GroundSpeed <= 2f && Math.Abs(sample.VerticalSpeed) <= 1f;
+                        Feedback = PositionError > 6f ? $"Drifting {PositionError:0.0} m downwind. Lean into the wind with cyclic." : HoverFeedback(sample, altitude, 6f);
+                    }
+                    else
+                    {
+                        required = 3f;
+                        stable = sample.Grounded && bodyHeight >= 0.2f && bodyHeight <= 3.2f && PositionError <= 4f
+                            && sample.GroundSpeed <= 0.6f && Math.Abs(sample.VerticalSpeed) <= 0.4f && sample.TiltDegrees <= 7f && TouchdownSpeed <= 1.5f;
+                        if (sample.Grounded && TouchdownSpeed > 1.5f) { Fail($"Touchdown {TouchdownSpeed:0.0} m/s. Keep the drift stopped and settle below 1.5 m/s."); return; }
+                        Feedback = sample.Grounded ? "Hold the cyclic into the wind while the landing is measured."
+                            : PositionError > 4f ? $"Pad center is {PositionError:0.0} m away. Hold into the wind as you descend." : "Descend slowly, still leaning into the wind.";
+                    }
+                    break;
+                case HeavyLift:
+                    required = 5f;
+                    peakTorque = Math.Max(peakTorque, sample.TorqueFraction);
+                    if (!sample.Grounded && sample.RotorSpeed01 < 0.95f) lowRotorSeconds += dt;
+                    if (lowRotorSeconds > 3f) { Fail("Rotor RPM drooped too long. Raise collective more slowly and let ground effect help the lift-off."); return; }
+                    stable = !sample.Grounded && sample.Altitude >= 20f && sample.Altitude <= 30f && sample.GroundSpeed <= 3f && Math.Abs(sample.VerticalSpeed) <= 1.5f;
+                    Feedback = sample.RotorSpeed01 < 0.95f ? $"Rotor RPM {sample.RotorSpeed01 * 100f:0}%. Lower collective slightly to let it recover."
+                        : sample.TorqueFraction > 1f ? $"Torque {sample.TorqueFraction * 100f:0}%. Ease the collective."
+                        : sample.Altitude < 20f ? "Climb steadily to 25 m; small collective increases." : sample.Altitude > 30f ? "Level off near 25 m." : "Hold 25 m with the heavy load.";
+                    break;
+                case SettlingWithPower:
+                    required = 2f;
+                    if (Stage == 0)
+                    {
+                        if (sample.VortexRing >= 0.5f)
+                        {
+                            Stage = 1;
+                            entryAltitude = sample.Altitude;
+                            Objective = "You are settling with power. Recover: forward cyclic to fly out of your own downwash, then collective.";
+                        }
+                        else if (sample.Altitude < 40f) { Fail("Too low to practise safely. Retry and start the descent higher."); return; }
+                        Feedback = sample.HorizontalAirspeed > 4f ? "Stop the forward drift first." : $"Descending {-sample.VerticalSpeed:0.0} m/s. Lower collective until the sink reaches 5–7 m/s.";
+                    }
+                    if (Stage == 1)
+                    {
+                        lowestAfterEntry = Math.Min(lowestAfterEntry, sample.Altitude);
+                        if (sample.Altitude < 20f) { Fail("Recovery started too late. Begin forward cyclic as soon as the sink accelerates."); return; }
+                        stable = sample.VortexRing < 0.05f && sample.HorizontalAirspeed >= 10f && sample.VerticalSpeed >= -2f;
+                        Feedback = sample.HorizontalAirspeed < 10f ? "Forward cyclic: fly out into clean air." : "Now add collective to arrest the descent.";
+                    }
+                    break;
+                case Autorotation:
+                    required = 2f;
+                    if (!RequestEngineFailure && ElapsedSeconds >= 3f)
+                    {
+                        RequestEngineFailure = true;
+                        Objective = "ENGINE FAILURE. Lower collective at once, hold 20–25 m/s, keep rotor RPM 90–110%, flare near 30 m, cushion with collective.";
+                    }
+                    if (RequestEngineFailure && !sample.Grounded && (sample.RotorSpeed01 < 0.9f || sample.RotorSpeed01 > 1.1f)) rotorOutsideSeconds += dt;
+                    stable = RequestEngineFailure && sample.Grounded && sample.GroundSpeed <= 1.5f && Math.Abs(sample.VerticalSpeed) <= 0.5f && sample.TiltDegrees <= 10f;
+                    if (stable) Stage = 1;
+                    Feedback = !RequestEngineFailure ? "Hold straight and level." : sample.Grounded ? "Hold level while the aircraft stops."
+                        : sample.RotorSpeed01 < 0.9f ? $"Rotor RPM {sample.RotorSpeed01 * 100f:0}%: lower collective!"
+                        : sample.RotorSpeed01 > 1.1f ? $"Rotor RPM {sample.RotorSpeed01 * 100f:0}%: raise collective slightly."
+                        : sample.Altitude > 35f ? $"Glide at 20–25 m/s. {sample.Altitude:0} m to the flare."
+                        : sample.Altitude > 5f ? "Flare: aft cyclic to slow down and slow the descent." : "Cushion: level the aircraft and raise collective.";
+                    break;
+                case ConfinedArea:
+                    required = 3f;
+                    stable = sample.Grounded && bodyHeight >= 0.2f && bodyHeight <= 3.2f && PositionError <= 3f && sample.GroundSpeed <= 0.6f
+                        && Math.Abs(sample.VerticalSpeed) <= 0.4f && sample.TiltDegrees <= 7f && TouchdownSpeed <= 1.2f;
+                    if (sample.Grounded && TouchdownSpeed > 1.2f) { Fail($"Touchdown {TouchdownSpeed:0.0} m/s. Come to a high hover over the pad first, then descend vertically."); return; }
+                    Feedback = sample.Grounded ? "Hold still while the landing is measured."
+                        : PositionError > 25f ? $"{PositionError:0} m to the pad. Approach high and slow."
+                        : PositionError > 3f ? $"Pad center {PositionError:0.0} m away. Stop above it before descending into the cutting."
+                        : "Vertical descent: watch the rotor clearance to the slopes.";
+                    break;
                 default:
                     float departure = Index == 5 ? 80f : 20f;
                     float minimumHeight = Index == 5 ? 12f : 5f;
@@ -174,7 +268,16 @@ namespace HoverForHire
 
             StableSeconds = stable ? StableSeconds + dt : 0f;
             Progress = MissionSession.Clamp01(StableSeconds / required);
-            if (StableSeconds >= required) Complete(sample);
+            if (StableSeconds < required) return;
+            if (Index == Crosswind && Stage == 0)
+            {
+                Stage = 1;
+                StableSeconds = 0f;
+                Progress = 0f;
+                Objective = "Now land in the crosswind: touch down within 4 m of center below 1.5 m/s and hold for 3 seconds.";
+                return;
+            }
+            Complete(sample);
         }
 
         public bool TryClaimResult(out ChallengeResult result)
@@ -196,6 +299,9 @@ namespace HoverForHire
             else if (Index == 2) score = 100f - Math.Min(25f, meanHeading * 0.4f) - Math.Min(15f, meanError);
             else if (Index == 3) score = 100f - Math.Abs(sample.VerticalSpeed) * 8f - Math.Abs(sample.GroundSpeed - 14f);
             else if (Index == 4) score = 100f - Math.Min(35f, brakingDistance * 0.2f) - Math.Abs(sample.VerticalSpeed) * 5f;
+            else if (Index == HeavyLift) score = 100f - Math.Min(40f, Math.Max(0f, peakTorque - 1f) * 150f) - Math.Min(30f, lowRotorSeconds * 10f);
+            else if (Index == SettlingWithPower) score = 100f - Math.Min(40f, Math.Max(0f, entryAltitude - lowestAfterEntry) * 0.5f);
+            else if (Index == Autorotation) score = 100f - Math.Min(40f, TouchdownSpeed * 8f) - Math.Min(30f, rotorOutsideSeconds * 3f);
             else score = 100f - Math.Min(25f, PositionError * 3f) - Math.Min(25f, TouchdownSpeed * 10f);
             // Time is deliberately a minor factor: controlled flight is the training goal.
             score = Math.Max(0f, score - Math.Min(5f, Math.Max(0f, ElapsedSeconds - 90f) / 30f));
@@ -203,6 +309,9 @@ namespace HoverForHire
                 : Index == 2 ? $"Mean heading error {meanHeading:0}°. Begin stopping the yaw before reaching your heading."
                 : Index == 3 ? "Steady forward flight. Practice the braking drill before faster approaches."
                 : Index == 4 ? $"Braking distance {brakingDistance:0} m. Remember that distance when planning an approach."
+                : Index == HeavyLift ? $"Peak torque {peakTorque * 100f:0}%; rotor below 95% for {lowRotorSeconds:0.0} s. Smooth, patient collective saves power."
+                : Index == SettlingWithPower ? $"Recovered after losing {Math.Max(0f, entryAltitude - lowestAfterEntry):0} m. Airspeed, not collective, is the way out."
+                : Index == Autorotation ? $"Touchdown {TouchdownSpeed:0.0} m/s; rotor outside 90–110% for {rotorOutsideSeconds:0.0} s. Flare earlier for a softer arrival."
                 : $"Landing offset {PositionError:0.0} m; impact {TouchdownSpeed:0.0} m/s. Settle over the center before lowering.";
             Result = new ChallengeResult
             {

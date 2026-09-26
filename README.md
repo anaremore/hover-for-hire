@@ -9,7 +9,7 @@ Version **0.2.0**, verified on 8 September 2026: **89 automated tests passed**, 
 ## Quick start
 
 1. When cloning the source, install Git LFS and run `git lfs pull` to fetch the helicopter and textures. Open this folder in **Unity 6000.3.22f1 (Unity 6.3 LTS)**. Install the Windows, macOS, or Linux **Mono** build support module for your desired player.
-2. Let Unity import packages. Open `Assets/HoverForHire/Scenes/PortMeridian.unity` and press Play. You start at home base in Free Flight, with the rotor governed and collective at zero.
+2. Let Unity import packages. Open `Assets/HoverForHire/Scenes/PortMeridian.unity` and press Play. You start at home base in Free Flight with collective at zero. On first launch, choose a realism preset: **Relaxed** (calm air, unlimited power) is the gentle start; **Realistic** and **Expert** add wind, power limits, settling with power and failures.
 3. Raise collective gently with **Left Shift**. Empty hover is around **45%**; loaded hover needs more. Use mouse or WASD cyclic, Q/E yaw, and Left Ctrl to lower collective. Brake early with aft cyclic, then reduce collective after touchdown.
 4. **Escape** opens the flight desk. Choose a training drill or a 15-minute delivery shift. **Enter** accepts the offered contract. Land and remain level and still for the service dwell; loading/unloading is automatic.
 
@@ -19,13 +19,23 @@ If setup assets ever need regeneration, use **Hover for Hire → Prepare project
 
 - Fixed-step Rigidbody lift, rotor torque, cyclic authority, explicit inertia, aerodynamic drag, payload mass, compound skid contact, impact damage, and recovery.
 - Rotor aerodynamics that make the helicopter settle like one: heave (inflow) damping so collective sets a climb rate within seconds, main/tail rotor rate damping in every assist mode, and tail-fin weathervaning in forward flight and crosswinds.
+- Optional Arma-style realism, set by the Relaxed / Realistic / Expert presets or effect by effect:
+  - ground effect and translational lift;
+  - speed stability (flapback);
+  - vortex ring state, where pulling collective makes it worse;
+  - finite engine power, with rotor RPM droop and torque limits;
+  - engine failures and autorotation;
+  - tail-rotor failures;
+  - seeded island wind with a height profile, gusts, turbulence and live windsocks.
+
+  Warnings cover low rotor RPM, overtorque, settling and failures.
 - Independent rate stabilization (with feed-forward), auto-level, yaw stabilization with coordinated turns at speed, and rotor torque compensation with Beginner, Standard, and Unassisted presets. Assists blend through bounded commands; turning them off removes their stabilization commands.
 - Complete collision: merged low-poly collision for about 3,200 trees and rocks, props, roofs, cranes and masts; exact rotor-disc blade-strike detection for main and tail rotors; a solid sea surface with ditching; crash panels that name the cause, the measured value and the limit.
 - A first-launch welcome, key hints that follow your bindings and device, Enter to start a shift from Free Flight, announced assist presets, and non-strobing rotors with motion discs.
 - Fine-then-coarse digital collective and pedal ramps, a hover-power tick on the collective gauge, a *Sim pedals* gamepad layout with analog trigger pedals, and a 50 Hz flight data recorder for playtest analysis.
 - Rebindable keyboard/mouse, gamepad, and absolute collective binding. Persistent collective, two mouse cyclic modes, free look hold/return options, saved bindings and preferences.
 - Chase and cockpit cameras with free look, smoothing, collision handling, and recentering.
-- Free Flight, seven training drills, passenger and internal cargo deliveries, stable loading/unloading, comfort/condition/landing/time scores, optional harder contracts, progression, and duplicate payout prevention.
+- Free Flight, twelve training drills (the basics, then crosswind, heavy lift, settling with power, autorotation and confined-area landings), passenger and internal cargo deliveries, stable loading/unloading, comfort/condition/landing/time scores, optional harder contracts, progression, and duplicate payout prevention.
 - Ten pads across a detailed coastal town, airport, ferry harbor, industrial yard, rooftop clinic, orchard, hills and remote sites; mixed forests, marked roads, boats and shoreline scenery.
 - Original modeled utility helicopter, live cockpit gauges, smooth painted/alloy/glass materials, textured terrain, animated water, cloud sky, soft shadows and film grading.
 - Transparent flight HUD, terrain minimap, compact cockpit readouts and a redesigned Flight Desk.
@@ -84,7 +94,7 @@ See [validation results and playtest checklist](Docs/Validation.md), [flight-mod
 
 ## Limits of this slice
 
-The flight model is deliberately simplified. Rotor RPM is governed; lift scales with collective and is tilted with the aircraft/disc. There is no wind simulation, ground effect, translational lift, autorotation, vortex-ring state, blade flapping, engine failures, or hover hold yet. Those remain deferred until the basic model has player feedback. Rotor wash and broken parts are visual effects; they do not add hidden flight forces. Crash severity varies visually, while the existing crash/recovery rules remain intact. See [art direction, asset sources and effects](Docs/Art.md).
+The flight model is deliberately simplified. Lift scales with collective and is tilted with the aircraft/disc. The realism effects are compact models chosen to teach the right technique: momentum-theory power, capped Cheeseman–Bennett ground effect and a severity-based vortex ring. They are not blade-element aerodynamics. Blade flapping, retreating-blade stall, fuel, sling loads and hover hold are not modeled yet. Rotor wash and broken parts are visual effects; they do not add hidden flight forces. Crash severity varies visually, while the existing crash/recovery rules remain intact. See [art direction, asset sources and effects](Docs/Art.md).
 
 The project is a game and practice aid, not a certified aviation simulator. Automated checks establish invariants and detect regressions; they cannot establish that the helicopter feels satisfying. Native macOS/Linux controller, display, and audio checks require those machines.
 
@@ -92,4 +102,4 @@ The project is a game and practice aid, not a certified aviation simulator. Auto
 
 `Assets/HoverForHire/Scripts/` separates Flight, Input, Cameras, Missions, Training, Persistence, Presentation, World, and Core. Edit `Assets/HoverForHire/Resources/UtilityHelicopter.asset` to tune the aircraft centrally. The world uses metres, mass kilograms, angular rates degrees/s, and physics forces newtons.
 
-Progression lives in Unity's `Application.persistentDataPath` as `progression.json` with a recovery backup. Controls, binding overrides, assists, and volume use local Unity PlayerPrefs. No cloud save is used. Tests isolate their persistence data. The original brief is in [Docs/Brief.md](Docs/Brief.md).
+Progression lives in Unity's `Application.persistentDataPath` as `progression.json` with a recovery backup. Controls, binding overrides, assists, realism, and volume use local Unity PlayerPrefs. No cloud save is used. Tests isolate their persistence data. The original brief is in [Docs/Brief.md](Docs/Brief.md).

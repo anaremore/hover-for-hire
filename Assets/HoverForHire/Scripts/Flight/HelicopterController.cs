@@ -4,6 +4,8 @@ using UnityEngine;
 
 namespace HoverForHire
 {
+    public enum SystemFailure { EngineOut, TailRotor }
+
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Rigidbody))]
     public sealed class HelicopterController : MonoBehaviour
@@ -13,12 +15,17 @@ namespace HoverForHire
         public MonoBehaviour InputSource;
         public Rigidbody Body;
         public AssistSettings Assists = new AssistSettings();
+        /// <summary>Which physical challenges are active. The defaults (ground effect and translational lift only) are Relaxed.</summary>
+        public RealismSettings Realism = new RealismSettings();
         /// <summary>Optional air-mass motion. Null is calm air.</summary>
         public IWindSource Wind;
         /// <summary>World water surface height (m). Negative infinity means no water.</summary>
         public float WaterSurfaceHeight = float.NegativeInfinity;
         [Tooltip("Layers the spinning rotors can strike. The aircraft's own colliders are always ignored.")]
         public LayerMask RotorClearanceMask = ~0;
+        [Tooltip("Mean flight time between random engine failures when realism enables them.")]
+        [Min(60f)] public float MeanSecondsBetweenEngineFailures = 1800f;
+        public int FailureSeed = 7;
 
         public bool Grounded => supports.Count > 0 && (Body == null ? transform.up : Body.rotation * Vector3.up).y > 0.4f;
         public bool Crashed { get; private set; }
@@ -37,6 +44,8 @@ namespace HoverForHire
         public Vector3 AirVelocity => Body == null ? Vector3.zero : Body.linearVelocity - CurrentWind;
         /// <summary>Magnitude of the 3D velocity through the air, including vertical motion.</summary>
         public float Airspeed => AirVelocity.magnitude;
+        /// <summary>Horizontal speed through the air: what translational lift and ground-effect fade respond to.</summary>
+        public float HorizontalAirspeed { get { Vector3 air = AirVelocity; return new Vector2(air.x, air.z).magnitude; } }
         /// <summary>Angle between the nose and the horizontal air velocity; positive when air arrives from the right.</summary>
         public float SideslipDegrees
         {
@@ -50,6 +59,10 @@ namespace HoverForHire
         /// <summary>Collective that balances the current weight in level, still air, out of ground effect.</summary>
         public float HoverCollective => Tuning == null || Body == null ? 0f :
             FlightMath.HoverCollective(Body.mass, Physics.gravity.y, Tuning);
+        /// <summary>Hover collective at the current height, including ground effect when enabled.</summary>
+        public float HoverCollectiveHere => Realism != null && Realism.GroundEffect && Tuning != null
+            ? HoverCollective / FlightMath.GroundEffectFactor(AltitudeAGL + Tuning.SkidClearanceMeters + Tuning.MainRotorHub.y, 0f, Tuning)
+            : HoverCollective;
         public float VerticalSpeed => Body == null ? 0f : Body.linearVelocity.y;
         public float Heading => Body == null ? transform.eulerAngles.y : Body.rotation.eulerAngles.y;
         public float LiftNewtons { get; private set; }
@@ -59,13 +72,35 @@ namespace HoverForHire
         public PilotCommand AssistedCommand { get; private set; }
         public Vector3 LocalAngularRatesDegrees => Body == null ? Vector3.zero :
             Quaternion.Inverse(Body.rotation) * Body.angularVelocity * Mathf.Rad2Deg;
+        /// <summary>Rotor speed as a fraction of governed speed (NR). Held at 1 unless power limits are on.</summary>
         public float RotorSpeed01 { get; private set; } = 1f;
         public float RotorRpm => RotorSpeed01 * (Tuning == null ? 395f : Tuning.GovernedRotorRpm);
+
+        // ---- Realism observations (for the HUD, audio, recorder and drills) ----
+        public bool EngineFailed { get; private set; }
+        public bool TailRotorFailed { get; private set; }
+        /// <summary>Engine torque as a fraction of its 100% rating (TQ).</summary>
+        public float TorqueFraction { get; private set; }
+        public float PowerRequiredW { get; private set; }
+        public float VortexRingSeverity { get; private set; }
+        public float GroundEffectGain { get; private set; }
+        public float TranslationalLiftGain { get; private set; }
+        /// <summary>0..1 shudder while passing through translational lift.</summary>
+        public float TransitionBuffet01 { get; private set; }
+        /// <summary>0..1 current turbulence buffet.</summary>
+        public float Turbulence01 { get; private set; }
+        public bool LowRotorSpeed => !Crashed && RotorSpeed01 < 0.95f;
+        public bool RotorOverspeed => !Crashed && RotorSpeed01 > 1.08f;
+        public bool Overtorque => !Crashed && TorqueFraction > 1.0f;
+        /// <summary>Rollover limit in force: the tuning's structural limit or the realism setting, whichever is lower.</summary>
+        public float RolloverLimitDegrees => Tuning == null ? 65f : Mathf.Min(Tuning.MaximumLandingTiltDegrees,
+            Realism != null ? Realism.RolloverLimitDegrees : Tuning.MaximumLandingTiltDegrees);
 
         public event Action CrashedEvent;
         public event Action<float> Touchdown;
         public event Action<AircraftImpact> Impact;
         public event Action ResetPerformed;
+        public event Action<SystemFailure> SystemFailed;
 
         private readonly HashSet<Collider> supports = new HashSet<Collider>();
         private readonly RaycastHit[] altitudeHits = new RaycastHit[32];
@@ -73,6 +108,8 @@ namespace HoverForHire
         private readonly AssistSolver solver = new AssistSolver();
         private Vector3 prePhysicsVelocity;
         private bool ownsTuning;
+        private float heaveForce, demandedLift, engineTorqueShare = 1f, simulationTime;
+        private System.Random failureRandom;
 
         private void Awake()
         {
@@ -82,6 +119,7 @@ namespace HoverForHire
                 ownsTuning = true;
             }
             if (Assists == null) Assists = new AssistSettings();
+            if (Realism == null) Realism = new RealismSettings();
             if (Body == null) Body = GetComponent<Rigidbody>();
             Body.useGravity = true;
             Body.isKinematic = false;
@@ -94,6 +132,7 @@ namespace HoverForHire
             Body.solverIterations = 12;
             Body.solverVelocityIterations = 6;
             Body.centerOfMass = Tuning.CenterOfMass;
+            failureRandom = new System.Random(FailureSeed);
             SetPayload(PayloadKg);
             solver.Reset(Assists, PilotCommand.Neutral);
             UpdateAltitude();
@@ -117,13 +156,29 @@ namespace HoverForHire
             sensor.Cause = cause;
         }
 
-        /// <summary>A spinning rotor touched something solid: a blade strike ends the flight.</summary>
+        /// <summary>
+        /// A spinning rotor touched something solid. A main-rotor strike ends the flight; a tail-rotor strike does too,
+        /// unless realism allows tail-rotor failures, in which case anti-torque is lost and the pilot must fly it down.
+        /// </summary>
         public void ReportRotorContact(CrashCause cause, Collider other)
         {
             if (Crashed || other == null || other.isTrigger || Tuning == null || RotorSpeed01 < Tuning.RotorStrikeMinimumSpeed01) return;
             if (other.attachedRigidbody == Body || other.transform.IsChildOf(transform)) return;
             if (((1 << other.gameObject.layer) & RotorClearanceMask) == 0) return;
+            if (cause == CrashCause.TailRotorStrike && Realism != null && Realism.TailRotorFailures)
+            {
+                if (!TailRotorFailed) { TailRotorFailed = true; SystemFailed?.Invoke(SystemFailure.TailRotor); }
+                return;
+            }
             ReportCrash(cause, 0f, 0f, other.name);
+        }
+
+        /// <summary>Stop the engine: the rotor is then driven only by the air (autorotation).</summary>
+        public void FailEngine()
+        {
+            if (Crashed || EngineFailed) return;
+            EngineFailed = true;
+            SystemFailed?.Invoke(SystemFailure.EngineOut);
         }
 
         public void SetPreset(AssistPreset preset)
@@ -155,6 +210,7 @@ namespace HoverForHire
             UpdateAltitude();
             CheckWater();
             float dt = Time.fixedDeltaTime;
+            simulationTime += dt;
             prePhysicsVelocity = Body.linearVelocity;
             RawCommand = !Crashed && InputSource is IFlightInput input ? input.Command.Clamped() : PilotCommand.Neutral;
             // The interpolated Transform is for rendering. Forces read the current physics pose.
@@ -165,25 +221,117 @@ namespace HoverForHire
             Vector3 airVelocity = Body.linearVelocity - CurrentWind;
             Vector3 localAir = inverseRotation * airVelocity;
             Vector3 inertia = Body.inertiaTensor;
-            float rotorReactionNm = LiftNewtons * Mathf.Max(0f, Tuning.RotorTorqueArmMeters);
+            float horizontalAir = new Vector2(airVelocity.x, airVelocity.z).magnitude;
+            // The fuselage reacts to the torque the engine delivers into the rotor: none once it has failed.
+            float rotorReactionNm = LiftNewtons * Mathf.Max(0f, Tuning.RotorTorqueArmMeters) * engineTorqueShare;
             AssistedCommand = solver.Step(RawCommand, localAngular, inverseRotation * Vector3.up,
                 rotorReactionNm, localAir, inertia, Tuning, Assists, dt);
-            RotorSpeed01 = Mathf.MoveTowards(RotorSpeed01, Crashed ? 0f : 1f, dt * (Crashed ? 0.35f : 1f));
-            LiftNewtons = FlightMath.Lift(AssistedCommand.Collective, Tuning) * RotorSpeed01 * RotorSpeed01;
 
             Vector3 localThrust = FlightMath.LocalThrustDirection(AssistedCommand.Cyclic, Tuning.RotorDiskTiltDegrees);
-            Body.AddForce(rotation * localThrust * LiftNewtons, ForceMode.Force);
-            Body.AddForce(Vector3.up * FlightMath.HeaveDamping(airVelocity.y, RotorSpeed01, Tuning), ForceMode.Force);
-            float authority = RotorSpeed01 * RotorSpeed01;
-            Vector3 controlTorque = new Vector3(AssistedCommand.Cyclic.y * Tuning.PitchTorqueNm,
-                AssistedCommand.Yaw * Tuning.YawTorqueNm, -AssistedCommand.Cyclic.x * Tuning.RollTorqueNm) * authority;
-            controlTorque.y += LiftNewtons * Mathf.Max(0f, Tuning.RotorTorqueArmMeters);
-            controlTorque += FlightMath.RotorRateDamping(localAngular, inertia, Tuning.RotorRateDampingPerSecond, authority);
+            Vector3 thrustDirection = rotation * localThrust;
+            UpdateRotorSpeed(dt, airVelocity, thrustDirection);
+            MaybeFailEngine(dt);
+            float rotor = RotorSpeed01, authority = rotor * rotor;
+
+            // Thrust: collective demand at the current rotor speed, shaped by the enabled aerodynamic effects.
+            float hubHeight = AltitudeAGL + Tuning.SkidClearanceMeters + Tuning.MainRotorHub.y;
+            float groundEffect = Realism.GroundEffect ? FlightMath.GroundEffectFactor(hubHeight, horizontalAir, Tuning) : 1f;
+            float translational = Realism.TranslationalLift ? FlightMath.TranslationalLiftFactor(horizontalAir, Tuning) : 1f;
+            VortexRingSeverity = Realism.VortexRingState && !Crashed
+                ? FlightMath.VortexRingSeverity(-airVelocity.y, horizontalAir, AssistedCommand.Collective, !EngineFailed, Realism.VortexOnsetScale, Tuning) : 0f;
+            float stall = Realism.PowerLimits ? FlightMath.RotorStallFactor(rotor, Tuning) : 1f;
+            GroundEffectGain = groundEffect - 1f;
+            TranslationalLiftGain = translational - 1f;
+            TransitionBuffet01 = Realism.TranslationalLift ? FlightMath.TranslationalBuffet(horizontalAir, Tuning) : 0f;
+            // The rotor works for the demanded thrust; a vortex ring wastes part of it.
+            demandedLift = FlightMath.Lift(AssistedCommand.Collective, Tuning) * authority * groundEffect * translational * stall;
+            LiftNewtons = demandedLift * (1f - FlightMath.VortexRingThrustLoss(VortexRingSeverity, AssistedCommand.Collective, HoverCollective, Tuning));
+
+            Body.AddForce(thrustDirection * LiftNewtons, ForceMode.Force);
+            // Upflow through a descending rotor adds thrust; in a vortex ring the rotor re-ingests its own wake instead.
+            heaveForce = FlightMath.HeaveDamping(airVelocity.y, rotor, Tuning) * (1f - VortexRingSeverity);
+            Body.AddForce(Vector3.up * heaveForce, ForceMode.Force);
+
+            float tail = TailRotorFailed ? 0f : 1f;
+            Vector3 controlTorque = new Vector3(AssistedCommand.Cyclic.y * Tuning.PitchTorqueNm * authority,
+                AssistedCommand.Yaw * Tuning.YawTorqueNm * authority * tail, -AssistedCommand.Cyclic.x * Tuning.RollTorqueNm * authority);
+            controlTorque.y += LiftNewtons * Mathf.Max(0f, Tuning.RotorTorqueArmMeters) * engineTorqueShare;
+            Vector3 damping = FlightMath.RotorRateDamping(localAngular, inertia, Tuning.RotorRateDampingPerSecond, authority);
+            damping.y *= tail;
+            controlTorque += damping;
             controlTorque.y += FlightMath.WeathervaneYawTorque(localAir, Tuning.WeathervaneCoefficient);
+            if (Realism.SpeedStability)
+            {
+                // Flapback: the disc tilts back with forward airspeed, raising the nose unless the pilot holds it down.
+                controlTorque.x -= Tuning.SpeedStabilityNmPerMs * Mathf.Max(0f, localAir.z) * authority;
+                float transition = FlightMath.TranslationalBuffet(horizontalAir * 1.6f, Tuning);
+                controlTorque.z -= Tuning.TransverseFlowNm * transition * authority;
+            }
+            if (VortexRingSeverity > 0f)
+            {
+                float buffet = Tuning.VortexRingBuffetNm * VortexRingSeverity;
+                controlTorque.x += (Mathf.PerlinNoise(simulationTime * 3.1f, 0.3f) - 0.5f) * 2f * buffet;
+                controlTorque.z += (Mathf.PerlinNoise(simulationTime * 2.7f, 5.1f) - 0.5f) * 2f * buffet;
+            }
+            Vector3 turbulence = Wind != null ? Wind.TurbulenceAt(Body.position) : Vector3.zero;
+            Turbulence01 = Mathf.Clamp01(turbulence.magnitude);
+            if (Turbulence01 > 0f)
+            {
+                float exposure = 0.4f + 0.6f * Mathf.Clamp01(horizontalAir / 20f);
+                controlTorque.x += turbulence.x * Tuning.TurbulenceTorqueNm * exposure;
+                controlTorque.z += turbulence.z * Tuning.TurbulenceTorqueNm * exposure;
+            }
             Body.AddRelativeTorque(controlTorque, ForceMode.Force);
 
             Body.AddRelativeForce(FlightMath.AerodynamicDrag(localAir, Tuning.LinearDrag, Tuning.QuadraticDrag), ForceMode.Force);
             Body.AddRelativeTorque(FlightMath.AerodynamicDrag(localAngular, Tuning.AngularDrag, Vector3.zero), ForceMode.Force);
+        }
+
+        /// <summary>
+        /// Rotor speed and engine torque. With power limits the rotor is a flywheel: the governed engine supplies torque
+        /// up to its limit, overpulling droops the rotor, and with the engine out only the air can drive it.
+        /// Without power limits the rotor stays governed and the engine supplies whatever is needed.
+        /// </summary>
+        private void UpdateRotorSpeed(float dt, Vector3 airVelocity, Vector3 thrustDirection)
+        {
+            if (Crashed)
+            {
+                RotorSpeed01 = Mathf.MoveTowards(RotorSpeed01, 0f, dt * 0.35f);
+                TorqueFraction = 0f;
+                engineTorqueShare = 0f;
+                return;
+            }
+            float axial = Vector3.Dot(airVelocity, thrustDirection);
+            float edgewise = (airVelocity - thrustDirection * axial).magnitude;
+            // Inside a vortex ring the rotor re-ingests its own wake: the descent brings no upflow to help it.
+            axial *= 1f - VortexRingSeverity;
+            float rotor = Mathf.Max(0.05f, RotorSpeed01);
+            float omega0 = FlightMath.GovernedOmega(Tuning);
+            PowerRequiredW = FlightMath.PowerRequired(demandedLift + heaveForce, edgewise, axial, rotor, Tuning);
+            float required = PowerRequiredW / (omega0 * rotor);
+            float rated = FlightMath.RatedTorque(Tuning);
+            float engine;
+            if (Realism.PowerLimits)
+            {
+                float omega = RotorSpeed01 * omega0;
+                engine = EngineFailed ? 0f : Mathf.Clamp(required + Tuning.RotorInertiaKgM2 * Tuning.GovernorGain * (omega0 - omega),
+                    0f, rated * Tuning.EngineTorqueLimit);
+                omega += (engine - required) / Mathf.Max(1f, Tuning.RotorInertiaKgM2) * dt;
+                RotorSpeed01 = Mathf.Clamp(omega / omega0, 0f, Tuning.MaximumRotorSpeed01);
+            }
+            else
+            {
+                RotorSpeed01 = Mathf.MoveTowards(RotorSpeed01, 1f, dt);
+                engine = Mathf.Max(0f, required);
+            }
+            TorqueFraction = engine / Mathf.Max(1f, rated);
+            engineTorqueShare = required > 1f ? Mathf.Clamp01(engine / required) : (EngineFailed ? 0f : 1f);
+        }
+
+        private void MaybeFailEngine(float dt)
+        {
+            if (Realism.EngineFailures != FailureMode.Random || !Realism.PowerLimits || EngineFailed || Crashed || Grounded || AltitudeAGL < 30f) return;
+            if (failureRandom.NextDouble() < dt / MeanSecondsBetweenEngineFailures) FailEngine();
         }
 
         private bool HasWater => !float.IsNegativeInfinity(WaterSurfaceHeight);
@@ -254,8 +402,8 @@ namespace HoverForHire
             float tilt = Vector3.Angle(Body.rotation * Vector3.up, Vector3.up);
             if (newTouchdown && LastTouchdownSpeed > Tuning.CrashVerticalSpeed)
                 ReportCrash(CrashCause.HardLanding, LastTouchdownSpeed, Tuning.CrashVerticalSpeed, collision.collider.name);
-            else if (supported && tilt > Tuning.MaximumLandingTiltDegrees)
-                ReportCrash(CrashCause.TipOver, tilt, Tuning.MaximumLandingTiltDegrees, collision.collider.name);
+            else if (supported && tilt > RolloverLimitDegrees)
+                ReportCrash(CrashCause.TipOver, tilt, RolloverLimitDegrees, collision.collider.name);
             else if (entering && normalImpact > Tuning.CrashImpactSpeed)
                 ReportCrash(CrashCause.ObstacleImpact, normalImpact, Tuning.CrashImpactSpeed, collision.collider.name);
         }
@@ -276,7 +424,10 @@ namespace HoverForHire
         }
 
         /// <summary>Explicit respawn only. Ordinary flight never writes position, rotation, or velocity.</summary>
-        public void ResetAt(Vector3 position, Quaternion rotation)
+        public void ResetAt(Vector3 position, Quaternion rotation) => ResetAt(position, rotation, Vector3.zero);
+
+        /// <summary>Respawn with an initial velocity, e.g. for drills that begin in flight. Systems are restored.</summary>
+        public void ResetAt(Vector3 position, Quaternion rotation, Vector3 velocity)
         {
             supports.Clear();
             Crashed = false;
@@ -284,22 +435,34 @@ namespace HoverForHire
             CrashValue = CrashLimit = 0f;
             CrashObstacle = "";
             LastTouchdownSpeed = 0f;
-            LiftNewtons = 0f;
+            LiftNewtons = demandedLift = 0f;
             RotorSpeed01 = 1f;
+            EngineFailed = TailRotorFailed = false;
+            engineTorqueShare = 1f;
+            heaveForce = 0f;
+            TorqueFraction = VortexRingSeverity = 0f;
             RawCommand = PilotCommand.Neutral;
             AssistedCommand = PilotCommand.Neutral;
-            prePhysicsVelocity = Vector3.zero;
+            prePhysicsVelocity = velocity;
             if (Body != null)
             {
                 Body.position = position;
                 Body.rotation = rotation;
-                Body.linearVelocity = Vector3.zero;
+                Body.linearVelocity = velocity;
                 Body.angularVelocity = Vector3.zero;
                 Body.WakeUp();
             }
             if (Assists != null) solver.Reset(Assists, PilotCommand.Neutral);
             if (Tuning != null) UpdateAltitude();
             ResetPerformed?.Invoke();
+        }
+
+        /// <summary>Start the collective actuator at a setting (airborne drill starts) instead of zero.</summary>
+        public void PrimeCollective(float collective)
+        {
+            var primed = new PilotCommand(Vector2.zero, 0f, Mathf.Clamp01(collective));
+            solver.Reset(Assists, primed);
+            AssistedCommand = primed;
         }
 
         private void OnDisable() => supports.Clear();

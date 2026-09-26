@@ -82,6 +82,9 @@ namespace HoverForHire
                 nextWashAt=Time.time+.055f;
                 RotorWash(location,aboveWater);
             }
+            // Aerodynamic shudder through the translational-lift transition, in a vortex ring and in turbulence; kept subtle.
+            float buffet=Mathf.Max(Aircraft.TransitionBuffet01*.12f,Mathf.Max(Aircraft.VortexRingSeverity*.35f,Aircraft.Turbulence01*.2f));
+            if(cameraShake!=null&&buffet>.01f&&!Aircraft.Crashed)cameraShake.AddImpact(buffet);
             if(smoking&&!waterEntered&&Time.time>=nextSmokeAt)
             {
                 nextSmokeAt=Time.time+.09f;
@@ -117,15 +120,17 @@ namespace HoverForHire
             if(hardSurface&&!waterSurface)strength*=.8f;
             int emitted=Mathf.CeilToInt(strength*8);
             float radius=2.1f+Mathf.Max(0,altitude)*.35f;
+            // The wind carries the raised dust and spray downwind.
+            Vector3 drift=WindSystem.Current!=null?WindSystem.Current.WindAt(ground+Vector3.up):Vector3.zero;
             for(int i=0;i<emitted;i++)
             {
                 float angle=UnityEngine.Random.value*Mathf.PI*2;
                 Vector3 outward=new Vector3(Mathf.Sin(angle),0,Mathf.Cos(angle));
                 Vector3 p=ground+outward*UnityEngine.Random.Range(radius*.3f,radius)+Vector3.up*.13f;
-                Vector3 velocity=outward*UnityEngine.Random.Range(2.5f,6)*strength+Vector3.up*UnityEngine.Random.Range(.2f,.6f);
+                Vector3 velocity=outward*UnityEngine.Random.Range(2.5f,6)*strength+Vector3.up*UnityEngine.Random.Range(.2f,.6f)+drift*.8f;
                 Color color=waterSurface?new Color(.79f,.90f,.88f,.28f):hardSurface?new Color(.69f,.70f,.63f,.21f):new Color(.65f,.56f,.39f,.32f);
                 Emit(dust,p,velocity,color,UnityEngine.Random.Range(hardSurface?.4f:.7f,hardSurface?.8f:1.4f),UnityEngine.Random.Range(1.1f,2.3f));
-                if(i%2==0)Emit(washStreak,ground+outward*radius+Vector3.up*.11f,outward*UnityEngine.Random.Range(4,8),new Color(.73f,.71f,.60f,waterSurface?.17f:.25f),UnityEngine.Random.Range(.07f,.15f),UnityEngine.Random.Range(.5f,.9f));
+                if(i%2==0)Emit(washStreak,ground+outward*radius+Vector3.up*.11f,outward*UnityEngine.Random.Range(4,8)+drift*.5f,new Color(.73f,.71f,.60f,waterSurface?.17f:.25f),UnityEngine.Random.Range(.07f,.15f),UnityEngine.Random.Range(.5f,.9f));
             }
         }
 

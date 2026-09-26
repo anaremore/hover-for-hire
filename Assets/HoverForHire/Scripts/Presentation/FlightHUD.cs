@@ -27,8 +27,21 @@ namespace HoverForHire
             Missions.FeedbackEvent+=MissionFeedback;
             try { if(PlayerPrefs.HasKey("hfh.assists"))JsonUtility.FromJsonOverwrite(PlayerPrefs.GetString("hfh.assists"),Aircraft.Assists); }catch(Exception){ }
             Audio.Volume=PlayerPrefs.GetFloat("hfh.volume",.65f);
+            try { if(PlayerPrefs.HasKey(RealismKey))JsonUtility.FromJsonOverwrite(PlayerPrefs.GetString(RealismKey),Missions.PlayerRealism); }catch(Exception){ }
+            Missions.PlayerRealism.Sanitize();
             firstRun=!PlayerPrefs.HasKey(FirstRunKey);
             Missions.StartFreeFlight();
+            Aircraft.SystemFailed+=OnSystemFailure;
+            if(firstRun)OpenWelcome();
+        }
+        const string RealismKey="HoverForHire.Realism.v1";
+        const int WelcomePage=4;
+        void OpenWelcome(){SetPause(true);page=WelcomePage;scroll=Vector2.zero;menuFocus=0;}
+        void OnSystemFailure(SystemFailure failure)
+        {
+            notice=failure==SystemFailure.EngineOut?"ENGINE FAILURE. Lower collective now: autorotate, hold 20–25 m/s, flare near 30 m."
+                :"TAIL ROTOR FAILURE. Reduce collective to cut torque; keep forward speed and land running.";
+            noticeUntil=Time.unscaledTime+8;
         }
         void ResetInput(){Input.ResetCommand();Game.CameraRig.SnapToTarget();}
         const string FirstRunKey="HoverForHire.FirstRunComplete.v1";
@@ -47,12 +60,12 @@ namespace HoverForHire
             return $"{Key("Pause")}  Flight desk    {Key("CollectiveIncrease")} / {Key("CollectiveDecrease")}  Collective    {Key("SwitchCamera")}  Camera    {Key("FreeLook")}  Look    {Key("Interact")}  {job}    {Key("Reset")}  Reset";
         }
         /// <summary>Diagnostics only: show the new-pilot panel for a capture without reading or writing preferences.</summary>
-        public void PreviewFirstRun()=>firstRun=true;
+        public void PreviewFirstRun(){firstRun=true;OpenWelcome();}
         /// <summary>Hide the new-pilot panel; remember=false (diagnostics) leaves the player's first launch untouched.</summary>
         public void DismissFirstRun(bool remember=true)
         {
             if(!firstRun)return;
-            firstRun=false;
+            firstRun=false;if(page==WelcomePage)page=0;
             if(remember){PlayerPrefs.SetInt(FirstRunKey,1);PlayerPrefs.Save();}
         }
         void MissionFeedback(string message)
@@ -82,7 +95,6 @@ namespace HoverForHire
         void Interact()
         {
             if(paused)return;
-            if(firstRun){DismissFirstRun();Missions.StartTraining(0);Input.ResetCommand();return;}
             if(Missions.Mode==GameMode.FreeFlight)
             {
                 // Starting a shift returns the aircraft to home base: immediate when already there, confirmed otherwise.
@@ -95,7 +107,7 @@ namespace HoverForHire
             }
             Missions.Interact();
         }
-        void Save(){Input.SaveSettings();PlayerPrefs.SetString("hfh.assists",JsonUtility.ToJson(Aircraft.Assists));PlayerPrefs.SetFloat("hfh.volume",Audio.Volume);PlayerPrefs.Save();}
+        void Save(){Input.SaveSettings();PlayerPrefs.SetString(RealismKey,JsonUtility.ToJson(Missions.PlayerRealism));PlayerPrefs.SetString("hfh.assists",JsonUtility.ToJson(Aircraft.Assists));PlayerPrefs.SetFloat("hfh.volume",Audio.Volume);PlayerPrefs.Save();}
         void Styles()
         {
             if(title!=null)return;
@@ -157,18 +169,24 @@ namespace HoverForHire
                 GUI.Label(new Rect(r.x+24,r.y+86,462,44),CrashReport.Advice(cause),small);
                 if(GUI.Button(new Rect(r.x+24,r.y+132,462,44),$"Retry  /  {Key("Reset")}",button))Retry();
             }
-            if(firstRun&&!paused&&!Aircraft.Crashed)DrawFirstRun();
+            DrawWarnings();
             if(debug)DrawDebug();
             if(paused)DrawMenu();
             GUI.matrix=previous;
         }
-        void DrawFirstRun()
+        /// <summary>Cockpit caution stack: only the conditions the active realism can produce.</summary>
+        void DrawWarnings()
         {
-            var r=new Rect(Width/2-290,232,580,178);Box(r,.95f);FlightHudGraphics.Fill(new Rect(r.x,r.y,r.width,3),FlightHudGraphics.Amber);
-            Text(new Rect(r.x+24,r.y+16,532,20),"MERIDIAN AIR SERVICE  /  NEW PILOT",hudSmall,FlightHudGraphics.Amber);
-            GUI.Label(new Rect(r.x+24,r.y+40,532,36),"Welcome to Port Meridian",title);
-            GUI.Label(new Rect(r.x+24,r.y+82,532,44),$"Collective sets lift: hold {Key("CollectiveIncrease")} to raise it gently, {Key("CollectiveDecrease")} to lower it. The Takeoff drill teaches it one step at a time.",small);
-            Text(new Rect(r.x+24,r.y+140,532,22),$"{Key("Interact")}  Start the Takeoff drill      {Key("Pause")}  Flight desk      {Key("Reset")}  Just fly",hudSmall,FlightHudGraphics.Paper);
+            if(Aircraft.Crashed)return;
+            float y=146;bool flash=Mathf.Repeat(Time.unscaledTime,.8f)<.5f;
+            void Warn(string text,Color color){var r=new Rect(Width/2-170,y,340,26);Box(r,.8f);FlightHudGraphics.Fill(new Rect(r.x,r.y,3,r.height),color);Text(new Rect(r.x,r.y+2,r.width,22),text,hudCenter,color);y+=30;}
+            Color red=new Color(1f,.3f,.24f);
+            if(Aircraft.EngineFailed)Warn("ENGINE FAILURE  ·  AUTOROTATE",red);
+            if(Aircraft.TailRotorFailed)Warn("TAIL ROTOR FAILURE",red);
+            if(Aircraft.Realism.PowerLimits&&Aircraft.LowRotorSpeed&&!Aircraft.Grounded&&flash)Warn($"LOW ROTOR RPM  {Aircraft.RotorSpeed01*100:0}%",red);
+            if(Aircraft.Realism.PowerLimits&&Aircraft.RotorOverspeed)Warn($"ROTOR OVERSPEED  {Aircraft.RotorSpeed01*100:0}%",FlightHudGraphics.Amber);
+            if(Aircraft.Realism.PowerLimits&&Aircraft.Overtorque)Warn($"OVERTORQUE  {Aircraft.TorqueFraction*100:0}%",FlightHudGraphics.Amber);
+            if(Aircraft.VortexRingSeverity>.3f)Warn("SETTLING WITH POWER  ·  FLY OUT FORWARD",FlightHudGraphics.Amber);
         }
         void Box(Rect rect,float alpha)=>FlightHudGraphics.Fill(rect,new Color(.045f,.065f,.053f,alpha));
         void Bar(Rect rect,float progress,Color color){Box(rect,.8f);var old=GUI.color;GUI.color=color;GUI.DrawTexture(new Rect(rect.x,rect.y,rect.width*Mathf.Clamp01(progress),rect.height),white);GUI.color=old;}
@@ -179,14 +197,18 @@ namespace HoverForHire
             style.normal.textColor=tint??FlightHudGraphics.Phosphor;GUI.Label(rect,text,style);style.normal.textColor=previous;
         }
         string ModeName=>Missions.Mode==GameMode.DeliveryShift?"DELIVERY SHIFT":Missions.Mode==GameMode.Training?"FLIGHT TRAINING":"FREE FLIGHT";
+        readonly GUIContent objectiveMeasure=new GUIContent();
         void DrawMission()
         {
-            Box(new Rect(26,26,348,126),.61f);
-            FlightHudGraphics.Fill(new Rect(26,26,3,126),FlightHudGraphics.Amber);
+            // The panel grows with the wrapped objective, so longer drill briefs never run into the status line.
+            objectiveMeasure.text=Missions.CurrentObjective;
+            float objective=Mathf.Max(49,label.CalcHeight(objectiveMeasure,316)),height=126+objective-49;
+            Box(new Rect(26,26,348,height),.61f);
+            FlightHudGraphics.Fill(new Rect(26,26,3,height),FlightHudGraphics.Amber);
             Text(new Rect(42,36,316,20),"PORT MERIDIAN  /  "+ModeName,hudSmall,FlightHudGraphics.Amber);
-            GUI.Label(new Rect(42,65,316,49),Missions.CurrentObjective,label);
+            GUI.Label(new Rect(42,65,316,objective),Missions.CurrentObjective,label);
             string status=Missions.Mode==GameMode.FreeFlight?"10 LANDING SITES  /  UNRESTRICTED":Missions.StatusText;
-            GUI.Label(new Rect(42,114,316,37),status,small);
+            GUI.Label(new Rect(42,65+objective,316,37),status,small);
             float right=Width-244;
             Text(new Rect(right,28,216,20),Missions.Mode==GameMode.DeliveryShift?"SHIFT REMAINING":"MERIDIAN AIR SERVICE",hudRight,FlightHudGraphics.Muted);
             Text(new Rect(right,51,216,36),Missions.Mode==GameMode.DeliveryShift?TimeText(Missions.RemainingSeconds):"M–04",hudValueRight,FlightHudGraphics.Paper);
@@ -346,10 +368,16 @@ namespace HoverForHire
             FlightHudGraphics.Fill(new Rect(26,554,266,1),new Color(.8f,.94f,.7f,.45f));
             Text(new Rect(39,566,242,22),Aircraft.Crashed?"M–04   /   RECOVERY":Aircraft.Grounded?"M–04   /   ON GROUND":"M–04   /   AIRBORNE",hudSmall,
                 Aircraft.Crashed?FlightHudGraphics.Amber:FlightHudGraphics.Paper);
-            Text(new Rect(39,597,240,22),$"ROTOR  {Aircraft.RotorRpm:0} rpm   /   {Aircraft.PayloadKg:0} kg",hudSmall);
+            if(Aircraft.Realism.PowerLimits)Text(new Rect(39,597,240,22),$"NR  {Aircraft.RotorSpeed01*100:0}%   TQ  {Aircraft.TorqueFraction*100:0}%   /   {Aircraft.PayloadKg:0} kg",hudSmall,
+                Aircraft.LowRotorSpeed||Aircraft.Overtorque?FlightHudGraphics.Amber:FlightHudGraphics.Phosphor);
+            else Text(new Rect(39,597,240,22),$"ROTOR  {Aircraft.RotorRpm:0} rpm   /   {Aircraft.PayloadKg:0} kg",hudSmall);
             string aids=(Aircraft.Assists.RateStabilization?"RATE  ":"")+(Aircraft.Assists.AutoLevel?"LEVEL  ":"")+(Aircraft.Assists.YawStabilization?"YAW  ":"")+(Aircraft.Assists.TorqueCompensation?"TORQUE":"");
             Text(new Rect(39,625,242,20),"ASSIST  /  "+(aids.Length==0?"OFF":aids),hudSmall,FlightHudGraphics.Muted);
-            Text(new Rect(39,651,242,20),Missions.Mode==GameMode.DeliveryShift?$"COMFORT {Missions.ComfortPercent:0}%   CARGO {Missions.CargoConditionPercent:0}%":"UTILITY  /  MERIDIAN AIR SERVICE",hudSmall,FlightHudGraphics.Muted);
+            Vector3 wind=Aircraft.CurrentWind;float windSpeed=new Vector2(wind.x,wind.z).magnitude;
+            string context=Missions.Mode==GameMode.DeliveryShift?$"COMFORT {Missions.ComfortPercent:0}%   CARGO {Missions.CargoConditionPercent:0}%"
+                :windSpeed>.5f?$"WIND  {Mathf.Repeat(Mathf.Atan2(-wind.x,-wind.z)*Mathf.Rad2Deg,360f):000}°  {windSpeed*1.9438f:0} kt   /   {Aircraft.Realism.Summary}"
+                :"REALISM  /  "+Aircraft.Realism.Summary;
+            Text(new Rect(39,651,242,20),context,hudSmall,FlightHudGraphics.Muted);
         }
         void DrawMap()
         {
@@ -450,7 +478,8 @@ namespace HoverForHire
             Text(new Rect(left+654,76,220,25),"FLIGHT PAUSED",hudRight,FlightHudGraphics.Phosphor);
             GUI.Label(new Rect(left+26,116,850,25),"D-pad / stick  Navigate      Left / right  Adjust      A  Select      B / Escape  Resume",small);
             GUILayout.BeginArea(new Rect(left+24,151,852,518));
-            int selectedPage=MenuToolbar(page,new[]{"Fly","Controls","Bindings","Camera / assists"});
+            if(page==WelcomePage){WelcomeMenu();GUILayout.EndArea();menuCount=menuIndex;menuFocus=Mathf.Clamp(menuFocus,0,Mathf.Max(0,menuCount-1));if(Event.current.type==EventType.Layout){menuActivate=false;menuAdjust=0;}return;}
+            int selectedPage=MenuToolbar(page,new[]{"Fly","Controls","Bindings","Assists / realism"});
             if(selectedPage!=page){page=selectedPage;scroll=Vector2.zero;menuFocus=0;}
             GUILayout.Space(10);scroll=GUILayout.BeginScrollView(scroll);insideMenuScroll=true;
             if(page==0)ModeMenu();else if(page==1)ControlMenu();else if(page==2)BindingMenu();else CameraMenu();
@@ -469,7 +498,7 @@ namespace HoverForHire
                 if(MenuButton("Browse next offer"))Missions.BrowseNextJob();
             }
             GUILayout.Space(10);GUILayout.Label("TRAINING  /  one skill at a time",label);
-            string[] drills={"01 Takeoff","02 Hover","03 Yaw control","04 Forward flight","05 Braking","06 Approach","07 Precision landing"};
+            string[] drills=new string[TrainingSession.Names.Length];for(int d=0;d<drills.Length;d++)drills[d]=(d+1).ToString("00")+" "+TrainingSession.Names[d];
             for(int i=0;i<drills.Length;i++){if(i%2==0)GUILayout.BeginHorizontal();if(MenuButton(drills[i])){Missions.StartTraining(i);Input.ResetCommand();SetPause(false);}if(i%2==1||i==drills.Length-1)GUILayout.EndHorizontal();}
             GUILayout.Space(6);if(MenuButton("Reset at helipad / retry current job")){Retry();SetPause(false);}
             GUILayout.Label("Raise collective gradually. Around 45% is empty hover power. Tilt forward to accelerate; tilt back early to brake. Lower collective after touchdown.",small);
@@ -512,8 +541,50 @@ namespace HoverForHire
             GUILayout.BeginHorizontal();foreach(AssistPreset p in Enum.GetValues(typeof(AssistPreset)))if(MenuButton(p.ToString())){preset=(int)p;Aircraft.SetPreset(p);}GUILayout.EndHorizontal();
             var a=Aircraft.Assists;a.RateStabilization=MenuToggle(a.RateStabilization,"Pitch / roll rate stabilization");a.AutoLevel=MenuToggle(a.AutoLevel,"Auto-level with centered cyclic");a.YawStabilization=MenuToggle(a.YawStabilization,"Yaw stabilization");a.TorqueCompensation=MenuToggle(a.TorqueCompensation,"Main rotor torque compensation");
             GUILayout.Label("Hover hold is deferred pending flight tuning. Level assist does not stop drift or hold altitude.",small);
+            RealismMenu();
             var s=Input.Settings;Slider("Camera distance / m",ref s.CameraDistance,5,25);Slider("Camera height / m",ref s.CameraHeight,1,10);Slider("Field of view / deg",ref s.CameraFov,45,100);Slider("Camera smoothing / s",ref s.CameraSmoothing,.02f,.8f);Slider("Look sensitivity",ref s.LookSensitivity,.02f,.5f);Slider("Gamepad look / deg/s",ref s.GamepadLookSpeed,30,240);
             s.InvertLook=MenuToggle(s.InvertLook,"Invert camera look");s.AutoRecenterView=MenuToggle(s.AutoRecenterView,"Automatically recenter view");Slider("Recenter delay / s",ref s.RecenterDelay,0,5);Slider("Recenter speed",ref s.RecenterSpeed,1,12);Slider("Audio volume",ref Audio.Volume,0,1);
+        }
+        /// <summary>Realism: the physical challenge, separate from control assists. Changes apply at once and are saved.</summary>
+        void RealismMenu()
+        {
+            var r=Missions.PlayerRealism;
+            GUILayout.Space(8);GUILayout.Label("Flight realism · "+r.Summary+" · the helicopter and weather push back; assists above are control help",label);
+            GUILayout.BeginHorizontal();
+            foreach(RealismPreset p in Enum.GetValues(typeof(RealismPreset)))if(MenuButton(p.ToString())){r.SetPreset(p);ApplyRealismChange();}
+            GUILayout.EndHorizontal();
+            bool before=r.GroundEffect;r.GroundEffect=MenuToggle(r.GroundEffect,"Ground effect cushion");
+            bool changed=before!=r.GroundEffect;
+            before=r.TranslationalLift;r.TranslationalLift=MenuToggle(r.TranslationalLift,"Translational lift");changed|=before!=r.TranslationalLift;
+            before=r.SpeedStability;r.SpeedStability=MenuToggle(r.SpeedStability,"Speed stability (nose rises with speed)");changed|=before!=r.SpeedStability;
+            before=r.VortexRingState;r.VortexRingState=MenuToggle(r.VortexRingState,"Settling with power (vortex ring state)");changed|=before!=r.VortexRingState;
+            before=r.PowerLimits;r.PowerLimits=MenuToggle(r.PowerLimits,"Engine power limits, rotor droop, autorotation");changed|=before!=r.PowerLimits;
+            before=r.TailRotorFailures;r.TailRotorFailures=MenuToggle(r.TailRotorFailures,"Tail rotor strike causes a failure, not a crash");changed|=before!=r.TailRotorFailures;
+            GUILayout.Label("Wind",small);
+            int wind=MenuToolbar((int)r.Wind,new[]{"Calm","Light","Moderate","Strong"});if(wind!=(int)r.Wind){r.Wind=(WindStrength)wind;changed=true;}
+            float gust=r.Gustiness;Slider("Gustiness",ref r.Gustiness,0,1);changed|=!Mathf.Approximately(gust,r.Gustiness);
+            GUILayout.Label("Engine failures",small);
+            int failures=MenuToolbar((int)r.EngineFailures,new[]{"Off","Drills only","Random (rare)"});if(failures!=(int)r.EngineFailures){r.EngineFailures=(FailureMode)failures;changed=true;}
+            if(changed)ApplyRealismChange();
+        }
+        void ApplyRealismChange()
+        {
+            Missions.PlayerRealism.Sanitize();
+            if(Missions.Mode!=GameMode.Training)Missions.ApplyPlayerRealism();
+            Save();
+        }
+        void WelcomeMenu()
+        {
+            var r=Missions.PlayerRealism;
+            GUILayout.Label("Welcome to Port Meridian",title);
+            GUILayout.Label($"Collective sets lift: hold {Key("CollectiveIncrease")} to raise it gently and {Key("CollectiveDecrease")} to lower it. Choose how hard the helicopter and weather push back; you can change this any time in the flight desk.",label);
+            GUILayout.Space(6);
+            if(MenuButton((r.MatchingPreset==RealismPreset.Relaxed?"●  ":"    ")+"Relaxed  ·  calm air, unlimited power, forgiving touchdowns")){r.SetPreset(RealismPreset.Relaxed);ApplyRealismChange();}
+            if(MenuButton((r.MatchingPreset==RealismPreset.Realistic?"●  ":"    ")+"Realistic  ·  light wind, power limits, settling with power")){r.SetPreset(RealismPreset.Realistic);ApplyRealismChange();}
+            if(MenuButton((r.MatchingPreset==RealismPreset.Expert?"●  ":"    ")+"Expert  ·  gusty wind, earlier settling, rare engine failures")){r.SetPreset(RealismPreset.Expert);ApplyRealismChange();}
+            GUILayout.Space(10);
+            if(MenuButton("Start the Takeoff drill  ·  recommended for new pilots")){DismissFirstRun();Missions.StartTraining(0);Input.ResetCommand();SetPause(false);}
+            if(MenuButton("Just fly  ·  free flight from home base")){DismissFirstRun();SetPause(false);}
         }
         void UpdateMenuNavigation()
         {
@@ -588,7 +659,7 @@ namespace HoverForHire
             if(Game!=null&&Game.Input!=null)
             {
                 Input.PauseRequested-=TogglePause;Input.ResetRequested-=Retry;Input.InteractRequested-=Interact;Input.DebugRequested-=ToggleDebug;Input.AssistRequested-=CycleAssists;Input.HoverRequested-=HoverNotice;Input.RecordRequested-=ToggleRecording;
-                if(Aircraft!=null)Aircraft.ResetPerformed-=ResetInput;if(Game.Missions!=null)Missions.FeedbackEvent-=MissionFeedback;
+                if(Aircraft!=null){Aircraft.ResetPerformed-=ResetInput;Aircraft.SystemFailed-=OnSystemFailure;}if(Game.Missions!=null)Missions.FeedbackEvent-=MissionFeedback;
             }
             foreach(var texture in new[]{mapTexture,buttonIdle,buttonHover,buttonActive,toggleOff,toggleOn})if(texture!=null)Destroy(texture);
         }

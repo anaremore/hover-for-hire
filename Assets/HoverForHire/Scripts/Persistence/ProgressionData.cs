@@ -21,7 +21,7 @@ namespace HoverForHire
             TotalEarnings += result.Payout;
             if (result.Mode == "Delivery Shift") CompletedDeliveries++;
             if (result.Mode == "Training" && result.ContractId != null && result.ContractId.StartsWith("training-", StringComparison.Ordinal)
-                && int.TryParse(result.ContractId.Substring(9), out int drill) && drill >= 0 && drill < 7)
+                && int.TryParse(result.ContractId.Substring(9), out int drill) && drill >= 0 && drill < TrainingSession.Names.Length)
                 CompletedTrainingMask |= 1 << drill;
             Results.Add(result);
             if (Results.Count > 100) Results.RemoveAt(0);

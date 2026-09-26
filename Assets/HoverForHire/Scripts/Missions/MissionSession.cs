@@ -27,6 +27,9 @@ namespace HoverForHire
         public float GroundSpeed, VerticalSpeed, Heading, Altitude, TiltDegrees;
         public float Acceleration, AngularSpeedDegrees;
         public bool Grounded, Crashed;
+        // Realism observations (zero/false when the effect is off).
+        public float HorizontalAirspeed, RotorSpeed01, TorqueFraction, VortexRing;
+        public bool EngineFailed;
     }
 
     [Serializable]
@@ -69,6 +72,8 @@ namespace HoverForHire
         public string Mode;
         public string Grade;
         public string Assists;
+        /// <summary>Realism preset or custom flags in force when the result was recorded.</summary>
+        public string Realism;
         public string CompletedUtc;
         public int Payout;
         public float Seconds;

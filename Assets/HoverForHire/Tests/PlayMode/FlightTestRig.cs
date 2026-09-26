@@ -21,6 +21,9 @@ namespace HoverForHire.Tests
         private readonly float oldFixedDeltaTime;
         private readonly Vector3 oldGravity;
 
+        /// <summary>The flat ground everything stands on; also a convenient solid object for strike tests.</summary>
+        public BoxCollider Ground { get; }
+
         public FlightTestRig()
         {
             oldSimulationMode = Physics.simulationMode;
@@ -32,7 +35,8 @@ namespace HoverForHire.Tests
             var floor = new GameObject("Handling rig ground");
             objects.Add(floor);
             floor.transform.position = Origin + Vector3.down * 0.5f;
-            floor.AddComponent<BoxCollider>().size = new Vector3(2000f, 1f, 2000f);
+            Ground = floor.AddComponent<BoxCollider>();
+            Ground.size = new Vector3(2000f, 1f, 2000f);
         }
 
         public static FlightTuning ShippedTuningCopy()
@@ -45,8 +49,9 @@ namespace HoverForHire.Tests
         }
 
         /// <summary>Production collision boxes, grounded at the rig origin with an independent tuning copy.</summary>
+        /// <summary>Realism defaults to <see cref="RealismSettings.None"/>: the base model the phase-1 envelope describes.</summary>
         public HelicopterController Create(AssistPreset preset = AssistPreset.Beginner, float payload = 0f,
-            FlightTuning tuning = null)
+            FlightTuning tuning = null, RealismSettings realism = null)
         {
             var go = new GameObject("Handling rig helicopter " + aircraft.Count);
             objects.Add(go);
@@ -68,6 +73,7 @@ namespace HoverForHire.Tests
             tunings.Add(controller.Tuning);
             controller.InputSource = input;
             controller.Assists.SetPreset(preset);
+            controller.Realism = realism ?? RealismSettings.None();
             go.SetActive(true);
             controller.SetPayload(payload);
             controller.Body.sleepThreshold = 0f;

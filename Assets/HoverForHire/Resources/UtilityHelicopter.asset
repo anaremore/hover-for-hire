@@ -41,6 +41,29 @@ MonoBehaviour:
   HeaveDampingNsPerM: 400
   RotorRateDampingPerSecond: {x: 2.5, y: 1, z: 2.5}
   WeathervaneCoefficient: 3
+  GroundEffectMaximumGain: 0.15
+  GroundEffectFadeSpeed: 15
+  TranslationalLiftGain: 0.1
+  TranslationalLiftStart: 5
+  TranslationalLiftFull: 13
+  SpeedStabilityNmPerMs: 14
+  TransverseFlowNm: 150
+  VortexRingOnset: 4.5
+  VortexRingFull: 7
+  VortexRingThrustLoss: 0.35
+  VortexRingGrowth: 2
+  VortexRingMaximumLoss: 0.7
+  VortexRingBuffetNm: 450
+  TurbulenceTorqueNm: 300
+  RotorInertiaKgM2: 1400
+  EngineRatedPowerW: 270000
+  EngineTorqueLimit: 1.1
+  GovernorGain: 4
+  ProfilePowerW: 30000
+  FigureOfMerit: 0.7
+  AirDensity: 1.225
+  RotorStallSpeed01: 0.7
+  MaximumRotorSpeed01: 1.2
   MainRotorHub: {x: 0, y: 2.055, z: -0.07}
   MainRotorRadius: 4.62
   TailRotorHub: {x: 0.3, y: 0.9, z: -5.09}

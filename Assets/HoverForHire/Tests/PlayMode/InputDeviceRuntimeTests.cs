@@ -224,6 +224,12 @@ namespace HoverForHire.Tests
             Assert.That(_input.Command.Cyclic, Is.EqualTo(held));
             Step();
             Assert.That(_input.Command.Cyclic, Is.EqualTo(held));
+
+            // Unattended diagnostics opt out of the focus pause; the look reset still applies.
+            _input.PauseOnFocusLoss = false;
+            _rig.SendMessage("OnApplicationFocus", false);
+            Assert.That(_input.IsPaused, Is.False);
+            Assert.That(_input.CameraLookDelta, Is.EqualTo(Vector2.zero));
         }
 
         [Test]

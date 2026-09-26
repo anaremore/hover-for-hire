@@ -30,7 +30,9 @@ Scores weight elapsed time (30%), pad placement (25%), worst loaded touchdown sp
 
 ## Training
 
-All seven drills begin grounded at home base and offer immediate retry. Landing drills first require departure, so simply sitting on the starting pad cannot complete them. This also avoids dropping the player into an airborne aircraft with an unset collective.
+Twelve drills offer immediate retry. The first seven teach basic handling and begin grounded at home base. Landing drills first require departure, so simply sitting on the starting pad cannot complete them.
+
+The last five teach the realism skills. Each one layers the effect it teaches on top of the player's own realism settings, so a Relaxed pilot can still practise it without changing preset. Drills that begin in the air start level, at the stated speed, with collective already set to hold height.
 
 | Drill | Observable completion condition |
 | --- | --- |
@@ -41,14 +43,25 @@ All seven drills begin grounded at home base and offer immediate retry. Landing 
 | Braking | Accelerate to 12 m/s above 6 m, then hold below 2 m/s at 6–25 m for 4 s; record stopping distance. |
 | Approach | Depart 80 m and climb above 12 m, return, touch down at ≤1.8 m/s and remain stable for 3 s. |
 | Precision landing | Depart 20 m and climb above 5 m, return within 2.5 m of pad center, touch down at ≤1 m/s and remain stable for 3 s. |
+| Crosswind landing | Moderate gusty wind from the east (8 m/s at 10 m). Hover at 8–12 m within 6 m of pad center for 8 s. Then land within 4 m of center at ≤1.5 m/s and hold for 3 s. |
+| Heavy lift | Maximum payload, with power limits on. Lift off and hold 20–30 m for 5 s. Rotor RPM below 95% for more than 3 s fails the drill; torque above 100% costs points. |
+| Settling with power | Vortex-ring physics on. Starts in a hover 220 m above home. Lower collective into a vertical descent until settling develops. Then recover with forward airspeed (≥10 m/s, settling gone, sink ≤2 m/s for 2 s) while still above 20 m. |
+| Autorotation | Power limits on. Starts 520 m east of home at 180 m, flying west at 25 m/s; the engine fails after 3 s. Touch down, stop level (≤1.5 m/s) and hold for 2 s. Scored on touchdown speed and time with rotor RPM outside 90–110%. |
+| Confined area | Starts 150 m south of and 60 m above Ridge Station. Land within 3 m of its center among the slopes at ≤1.2 m/s, without a rotor strike, and hold for 3 s. |
 
-Training measures mean hover position error, heading error, touchdown impact, placement, braking distance and elapsed time as appropriate. Completion time contributes at most a five point deduction: accuracy and control take priority over rushing. Continuous holds restart when the target is lost. Drills fail on a crash, reset, overly hard required landing, or after five minutes, with actionable feedback. A failed drill never creates a completion record.
+Training measures the following, as appropriate to the drill:
+* mean hover position error and heading error;
+* touchdown impact and placement;
+* braking distance;
+* peak torque and time with low rotor RPM;
+* height lost in a settling-with-power recovery;
+* elapsed time. Completion time contributes at most a five point deduction: accuracy and control take priority over rushing. Continuous holds restart when the target is lost. Drills fail on a crash, reset, overly hard required landing, or after five minutes, with actionable feedback. A failed drill never creates a completion record.
 
 Training height bands measure upright skid clearance above the home pad, accounting for the 1.5 m origin-to-skid offset. The HUD measures skid clearance over the surface directly beneath the aircraft; those agree above the home pad, while terrain changes during departure can make local AGL differ from height above home.
 
 ## Persistence and result integrity
 
-`progression.json` is stored in Unity's per-user `Application.persistentDataPath`, independently from input/settings persistence. Results record all distinct assist configurations used during a challenge, along with grade, score, time, condition and landing metrics. Training records are separate from paid deliveries and do not unlock contracts.
+`progression.json` is stored in Unity's per-user `Application.persistentDataPath`, independently from input/settings persistence. Results record all distinct assist configurations used during a challenge, the realism in force (for example `REALISTIC` or `CUSTOM: GE ETL POWER`), grade, score, time, condition and landing metrics. Older saves without a realism field load unchanged. Training records are separate from paid deliveries and do not unlock contracts.
 
 The save writes a fully flushed temporary file, replaces the primary file and retains a backup. Loading rejects missing/unsupported schema and invalid data, then tries the backup. A partial temporary write is never treated as completed progression. Platforms without `File.Replace` use a recoverable backup/move sequence. A corrupt primary does not overwrite the valid backup during recovery. Save failures keep progress in memory, expose `SaveWarning`, and retry on the next result, application pause or quit. The most recent 100 challenge details are retained; attempt IDs are retained for duplicate-payment protection.
 
@@ -60,7 +73,7 @@ The primary public surface is `Mode`, `CurrentObjective`, `StatusText`, `TargetZ
 
 ## Verification
 
-Edit Mode tests cover passenger/cargo round trips, grounded/elevation checks, every stability condition resetting dwell, crash/deadline failure, retry requiring a fresh pickup, terminal payout guards, rough handling scoring, persisted duplicate IDs, JSON round trip, backup recovery after corruption or interrupted replacement, training without payment, every drill's completion path, uninterrupted hover, and rejection of stationary or hard landing completion.
+Edit Mode tests cover passenger/cargo round trips, grounded/elevation checks, every stability condition resetting dwell, crash/deadline failure, retry requiring a fresh pickup, terminal payout guards, rough handling scoring, persisted duplicate IDs, JSON round trip, backup recovery after corruption or interrupted replacement, training without payment, every drill's completion path (including crosswind, heavy lift, settling with power, autorotation and the confined area measured against its own pad), uninterrupted hover, and rejection of stationary or hard landing completion. `RealismRuntimeTests` flies the realism techniques with physics: an autorotation landing at 0.9 m/s and an autopilot crosswind landing 0.9 m from center.
 
 `FlownDeliveryTests` flies a complete passenger job over the production island with no relocation: a diagnostic autopilot supplies ordinary bounded pilot commands (cyclic, pedals, collective) to the real aircraft, which loads at home base, flies about 390 m to Town Green, lands and unloads (65–71 s of flight, touchdown ≈0.5 m/s, grade A). The same autopilot lands the smoke flight back at home base instead of teleporting it.
 

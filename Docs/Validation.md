@@ -1,6 +1,69 @@
 # Validation and playtest checklist
 
-Status snapshot: **26 September 2026, Unity 6000.3.22f1** (phase 1 of the 0.3 overhaul; the 0.2.0 and 0.1.0 sections below are kept as the baseline). The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
+Status snapshot: **26 September 2026, Unity 6000.3.22f1** (phase 3 of the 0.3 overhaul; the 0.2.0 and 0.1.0 sections below are kept as the baseline). The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
+
+## Arma-style realism (0.3 development, phase 3)
+
+**26 September 2026.** Realism is optional. It comes as three presets (Relaxed / Realistic / Expert) plus per-effect toggles, covering:
+- ground effect and translational lift;
+- speed stability;
+- vortex ring state;
+- finite engine power with rotor RPM;
+- engine failures and autorotation;
+- tail-rotor failures;
+- a seeded island wind with gusts, turbulence and live windsocks.
+
+The phase also adds:
+- five new drills: crosswind landing, heavy lift, settling with power, autorotation and confined area;
+- a realism picker on the first-run page;
+- a realism menu;
+- a HUD warning stack;
+- aerodynamic camera shudder;
+- wind-blown rotor wash.
+
+The shipped tuning asset now records every realism value.
+
+Automated results: **98 EditMode** and **57 PlayMode** tests passed (87 and 47 before). Each effect was prototyped in Python before implementation. The flown results match the prototype's predictions to within a few percent.
+
+| Flown check (`RealismRuntimeTests`, only the named effect on) | Result | Prototype |
+| --- | --- | --- |
+| 95% of hover collective, ground effect on / off | Holds a 1.61 m hover / stays on the ground | 1.61 m |
+| Translational lift at hover collective, 16 → 13 m/s | Climbs 1.91 m/s (without it: 0.00) | ≈1.8 m/s |
+| Flapback at 25 m/s, hands off | Nose 5.7° higher after 3 s | — |
+| Vortex ring from a vertical descent at 76% of hover collective | Develops after 11.7 s. Holding collective sinks at 13.0 m/s; pulling full collective sinks faster, at 15.8 m/s; flying out recovers after losing 86 m | 11.7 s; 12.9 / 15.8 m/s; 90 m |
+| Maximum-weight hover / 80% collective at maximum weight | Torque 85% / torque at the 110% limit, rotor droops to 92.0%, climbs 2.71 m/s (6.54 m/s with unlimited power) | 84.8% / 110%, 92.0% |
+| Engine failure, collective held / lowered | Rotor at 90% after 1.88 s / never below 95.7% | 1.88 s |
+| Autorotation from 180 m and 25 m/s (glide, flare at 35 m, level at 6 m, cushion at 3 m) | Glide descent 8.4 m/s, rotor 95–102%, touchdown 0.93 m/s with 7.3 m/s ground speed, slides to a stop | 0.86 m/s |
+| Autopilot landing in an 8 m/s gusty crosswind (up to 11.1 m/s) | 0.90 m from centre, touchdown 0.16 m/s | — |
+| Tail-rotor strike with failures on / off | Spins at 50°/s after 3 s, or 25°/s with collective lowered / crash | — |
+| Relaxed vs the base model, hovering at 200 m on +1% collective | Largest vertical-speed difference 0.0007 m/s; climbs 0.478 m/s | identical |
+
+**Prototype findings.** The prototype showed that with a fixed thrust loss, pulling collective escaped the vortex ring after only 20 m, which contradicts the drill's lesson. The loss now grows with collective above hover, and inside the ring the descent no longer lowers the power required. Pulling collective now makes the sink worse, while flying out still recovers. The autopilot gained a small wind trim near the pad. Without it, proportional control balanced wind drag against lean off-centre, and the autopilot never began its descent.
+
+**Smoke runs.** The Windows smoke run now includes a realism segment. It starts the autorotation drill, confirms the engine fails 3 s in, captures the drill brief and the warning stack, and returns to free flight. The run also no longer pauses when another window takes focus.
+
+Final Windows smoke runs (`Tools/Smoke.ps1`, 1600×900 windowed). All of them passed with zero recorded errors, and the 60 fps run's art tour passed all four effects diagnostics:
+
+| Frame cap | Average FPS | Scripted peak AGL / ground speed | Autopilot return | Autorotation drill engine | Errors | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| 30 | 29.8 | 25.41 m / 3.56 m/s | landed home (0.26 m/s, 0.08 m, 46 s) | failed on cue | 0 | pass |
+| 60 | 59.2 | 25.43 m / 3.56 m/s | landed home (0.26 m/s, 0.09 m, 46 s) | failed on cue | 0 | pass |
+| 144 | 141.1 | 25.37 m / 3.56 m/s | landed home (0.25 m/s, 0.06 m, 46 s) | failed on cue | 0 | pass |
+| 144 | 141.0 | 25.41 m / 3.56 m/s | landed home (0.26 m/s, 0.08 m, 46 s) | failed on cue | 0 | pass |
+| 144 | 141.1 | 25.38 m / 3.56 m/s | landed home (0.27 m/s, 0.09 m, 46 s) | failed on cue | 0 | pass |
+
+**Peak AGL.** The scripted segment's peak AGL rose from 19.9 m to 25.4 m. This is expected: Relaxed includes ground effect, so the same 49% collective lifts off more briskly for the first few metres. It remains inside the 8–32 m pass band.
+
+**Unexplained crash.** One earlier 144 fps run of the first phase-3 build crashed natively in `UnityPlayer.dll`, 22 s into the autopilot's return flight.
+- **What it was:** a read access violation of freed memory on the main thread, with no managed exception or log error.
+- **What followed:** four more 144 fps runs (one on that build, three on the final build) passed, as did every 30 and 60 fps run.
+- **Status:** the cause is unknown. The crash dump is kept locally, and symbolizing it needs Unity's player symbols. Any recurrence will be investigated.
+
+**Screenshot review.**
+- The first-run page offers the three presets, with Relaxed selected.
+- The Assists / realism tab lists the realism toggles beneath the assists.
+- In the autorotation drill, the red ENGINE FAILURE · AUTOROTATE warning, the failure notice, NR/TQ and REALISM / CUSTOM: GE ETL POWER are all readable.
+- The review also caught a real layout bug: the longer drill briefs overflowed the two-line objective panel. The panel now grows to fit its text.
 
 ## Collision, water and onboarding (0.3 development, phase 2)
 
@@ -117,7 +180,8 @@ The baseline views were inspected at 1280×720. That pass corrected pad surface 
 | Complete passenger and cargo deliveries | Explicit lifecycle, grounded stable dwell, payload mass, time/placement/impact/condition scoring. | Real pad/skid integration completes both jobs, applies loaded mass and saves two payouts. Wrong-floor contact cannot unload. Fixture relocation between pads isolates mission behavior. | Fly both actual routes end to end; judge objective readability, approach workload, loaded handling and service feedback. |
 | Crash, retry and continue | Crash/reset failure clears payload; retry restarts pickup; completed attempts cannot reopen payment. | Hard-contact crash/reset, external reset/retry, repeated post-delivery reset and duplicate payout protection pass. | Recover using the player controls after a hard landing and after a loaded mission failure; verify the next objective is clear. |
 | Change controls, restart and retain settings | Local preferences, semantic binding overrides and separate progression with recoverable JSON backup. | Input/settings round trips and regenerated-action binding restoration pass; mission save/reload, backup recovery and persistent duplicate IDs pass. | Rebind a useful action, change sensitivity/assists, restart the standalone player, confirm restoration, then restore desired settings. |
-| Practice seven short drills | Takeoff, hover, yaw, forward flight, braking, approach and precision landing with measurable completion conditions and retries. | All seven core completion paths pass; unstable hover, hard precision landing and remaining on the starting pad cannot falsely complete. | Instructions and feedback should lead to useful corrections; complete at least hover and precision landing using real controls. |
+| Practice twelve short drills | Takeoff, hover, yaw, forward flight, braking, approach and precision landing, plus crosswind, heavy lift, settling with power, autorotation and confined area, with measurable completion conditions and retries. | All twelve completion paths pass; unstable hover, hard precision landing and remaining on the starting pad cannot falsely complete. The realism techniques are flown by physics (autorotation touchdown 0.93 m/s, vortex-ring recovery, crosswind landing). | Instructions and feedback should lead to useful corrections; complete at least hover, precision landing and the autorotation drill using real controls. |
+| Choose how hard the aircraft and weather push back | Relaxed / Realistic / Expert realism or individual toggles, recorded with every result; each realism drill switches on only the effect it teaches. | Each effect is flown with only it enabled; Relaxed matches the base model to 0.001 m/s away from the ground; presets and custom summaries round-trip. | Fly the settling-with-power and autorotation drills in Realistic; judge whether the warnings, shudder and feedback teach the technique, and whether Expert wind is fun rather than tiring. |
 | Maintain consistent handling across rendering rates | Fixed 50 Hz physics; elapsed-time actuator response; frame-aware mouse processing. | Pure mouse/return tests and rendered player sequences at 30/60/144 FPS pass; flight metrics vary by less than 1%. | Repeat a complete route at these frame rates with actual controls. Judge frame pacing, camera response and landing consistency. |
 | Play on Windows, macOS and Linux | Standalone build entry points and cross-platform Unity/Input System code. | All three builds succeeded; Windows player launched and completed scripted flights. | Native macOS/Linux launch, display, controller mapping, focus/OS shortcuts, audio, local saves and practical performance. |
 
@@ -137,6 +201,6 @@ On native macOS and Linux, repeat launch, a brief gamepad/keyboard flight, camer
 
 ## Scope limits that affect interpretation
 
-Hover hold, ground effect and translational lift are deliberately deferred until basic hover, forward flight, braking and landing have human feedback. The hover-hold binding currently reports that the feature is unavailable; it is not an active assist. Wind physics, autorotation, complex rotor/failure regimes and aviation certification are outside this slice. The model and its units are detailed in [FlightModel.md](FlightModel.md); control processing and platform fallbacks are in [Controls.md](Controls.md).
+Hover hold is not implemented yet; its binding reports that the feature is unavailable and is not an active assist. The realism effects are compact models chosen to teach the right technique. Blade-element aerodynamics, retreating-blade stall, failures beyond the engine and tail rotor, and aviation certification are outside this slice. The model and its units are detailed in [FlightModel.md](FlightModel.md); control processing and platform fallbacks are in [Controls.md](Controls.md).
 
 No automated result establishes that the helicopter feels good. Native platform testing, comfortable camera tuning, controller ergonomics and satisfying approaches remain explicit human acceptance work.

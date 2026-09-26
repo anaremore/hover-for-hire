@@ -14,6 +14,12 @@ namespace HoverForHire
         public string ProgressionPathOverride;
         [Min(60f)] public float ShiftDurationSeconds = 900f;
         public string AssistSnapshot = "";
+        /// <summary>The player's chosen realism. Drills layer their required effects on a copy of it.</summary>
+        public RealismSettings PlayerRealism = new RealismSettings();
+        /// <summary>Shared island wind, configured from realism (null in fixtures without wind).</summary>
+        public WindField Wind;
+        [Tooltip("Prevailing wind direction (meteorological, degrees) when realism enables wind.")]
+        public float PrevailingWindFrom = 240f;
         public GameMode Mode { get; private set; } = GameMode.FreeFlight;
         public MissionSession CurrentMission { get; private set; }
         public TrainingSession CurrentTraining { get; private set; }
@@ -146,13 +152,16 @@ namespace HoverForHire
                 X = position.x, Y = position.y, Z = position.z, Grounded = Aircraft.Grounded, Crashed = Aircraft.Crashed,
                 GroundSpeed = Aircraft.GroundSpeed, VerticalSpeed = Aircraft.VerticalSpeed, Heading = Aircraft.Heading,
                 Altitude = Aircraft.AltitudeAGL, TiltDegrees = Vector3.Angle(Aircraft.Body.rotation * Vector3.up, Vector3.up),
-                Acceleration = acceleration, AngularSpeedDegrees = Aircraft.Body.angularVelocity.magnitude * Mathf.Rad2Deg
+                Acceleration = acceleration, AngularSpeedDegrees = Aircraft.Body.angularVelocity.magnitude * Mathf.Rad2Deg,
+                HorizontalAirspeed = Aircraft.HorizontalAirspeed, RotorSpeed01 = Aircraft.RotorSpeed01,
+                TorqueFraction = Aircraft.TorqueFraction, VortexRing = Aircraft.VortexRingSeverity, EngineFailed = Aircraft.EngineFailed
             };
             string assists = ActiveAssists();
             if (Mode == GameMode.Training && CurrentTraining != null)
             {
                 CurrentTraining.RecordAssists(assists);
                 CurrentTraining.Tick(deltaSeconds, sample);
+                if (CurrentTraining.RequestEngineFailure && !Aircraft.EngineFailed && !Aircraft.Crashed) Aircraft.FailEngine();
                 if (CurrentTraining.TryClaimResult(out ChallengeResult result)) RecordResult(result);
             }
             else if (Mode == GameMode.DeliveryShift && !ShiftFinished)
@@ -198,10 +207,71 @@ namespace HoverForHire
         public void StartTraining(int index)
         {
             BeginMode(GameMode.Training);
-            ResetAircraft(HomeZone);
             if (HomeZone == null || Aircraft == null) return;
-            CurrentTraining = new TrainingSession(index, HomeZone.Definition, 0f, ActiveAssists());
+            index = Mathf.Clamp(index, 0, TrainingSession.Names.Length - 1);
+            // Each realism drill forces on the effect it teaches, on top of the player's own settings.
+            RealismSettings drill = PlayerRealism.Clone();
+            WindStrength windStrength = drill.Wind;
+            float gust = drill.Gustiness, windFrom = PrevailingWindFrom;
+            LandingZone target = null;
+            switch (index)
+            {
+                case TrainingSession.Crosswind: windStrength = WindStrength.Moderate; gust = Mathf.Max(gust, 0.3f); windFrom = 90f; break;
+                case TrainingSession.HeavyLift: drill.PowerLimits = true; break;
+                case TrainingSession.SettlingWithPower: drill.VortexRingState = true; break;
+                case TrainingSession.Autorotation: drill.PowerLimits = true; drill.EngineFailures = FailureMode.Off; break;
+                case TrainingSession.ConfinedArea: target = Zones.Length > 6 ? Zones[6] : HomeZone; break;
+            }
+            ApplyRealism(drill, windStrength, gust, windFrom);
+            switch (index)
+            {
+                case TrainingSession.SettlingWithPower:
+                    // High enough to enter the ring and fly out of it with room to spare.
+                    ResetAirborne(HomeZone.transform.position + Vector3.up * 220f, 0f, 0f);
+                    break;
+                case TrainingSession.Autorotation:
+                    // Gliding west toward the airport's open northern apron, clear of the terminal and hangar.
+                    Vector3 start = HomeZone.transform.position + new Vector3(520f, 0f, 40f);
+                    start.y = Mathf.Max(start.y, IslandWorld.MeshHeight(start.x, start.z)) + 180f;
+                    ResetAirborne(start, 270f, 25f);
+                    break;
+                case TrainingSession.ConfinedArea:
+                    ResetAirborne(target.transform.position + new Vector3(0f, 60f, -150f), 0f, 0f);
+                    break;
+                default:
+                    ResetAircraft(HomeZone);
+                    break;
+            }
+            if (index == TrainingSession.HeavyLift) Aircraft.SetPayload(Aircraft.Tuning.MaximumPayloadKg);
+            CurrentTraining = new TrainingSession(index, HomeZone.Definition, 0f, ActiveAssists(), target != null ? target.Definition : (ZoneDefinition?)null);
             FeedbackEvent?.Invoke("Training · " + TrainingName);
+        }
+
+        /// <summary>Apply the player's realism (and its wind) to the aircraft, e.g. after changing settings.</summary>
+        public void ApplyPlayerRealism() => ApplyRealism(PlayerRealism.Clone(), PlayerRealism.Wind, PlayerRealism.Gustiness, PrevailingWindFrom);
+
+        private void ApplyRealism(RealismSettings effective, WindStrength wind, float gustiness, float fromDegrees)
+        {
+            effective.Sanitize();
+            if (Aircraft != null) Aircraft.Realism = effective;
+            Wind?.Configure(wind, gustiness, fromDegrees);
+        }
+
+        /// <summary>Drill start in flight: level, heading given in degrees, forward speed in m/s, collective primed to hold height.</summary>
+        private void ResetAirborne(Vector3 position, float heading, float speed)
+        {
+            suppressReset = true;
+            try
+            {
+                Quaternion rotation = Quaternion.Euler(0f, heading, 0f);
+                Aircraft.SetPayload(0f);
+                Aircraft.ResetAt(position, rotation, rotation * Vector3.forward * speed);
+                float collective = Aircraft.HoverCollective * (speed > 5f ? 0.95f : 1f);
+                if (Aircraft.InputSource is FlightInput input) input.ResetCommand(collective);
+                Aircraft.PrimeCollective(collective);
+                hasVelocity = false;
+            }
+            finally { suppressReset = false; }
         }
 
         public void AcceptNextJob()
@@ -250,6 +320,7 @@ namespace HoverForHire
         {
             modeStarted = true;
             BindAircraft();
+            if (mode != GameMode.Training) ApplyPlayerRealism();
             CurrentMission?.Fail("Flight mode changed.");
             CurrentTraining?.Fail("Flight mode changed.");
             CurrentMission = null; CurrentTraining = null; LastResult = null;
@@ -318,6 +389,7 @@ namespace HoverForHire
         private void RecordResult(ChallengeResult result)
         {
             if (Progression == null) Progression = new ProgressionData();
+            if (Aircraft != null && Aircraft.Realism != null) result.Realism = Aircraft.Realism.Summary;
             if (!Progression.Apply(result)) return;
             LastResult = result;
             if (result.Mode == "Delivery Shift")

@@ -75,6 +75,7 @@ namespace HoverForHire.Tests
             tunings.Add(controller.Tuning);
             controller.InputSource = input;
             controller.Assists.SetPreset(preset);
+            controller.Realism = RealismSettings.None(); // Base-model regression checks: no realism effects.
             go.SetActive(true);
             controller.SetPayload(payload);
             controller.Body.sleepThreshold = 0f;

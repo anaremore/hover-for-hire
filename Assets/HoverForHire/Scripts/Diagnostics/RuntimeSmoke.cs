@@ -30,10 +30,13 @@ namespace HoverForHire
             Application.logMessageReceived+=OnLog;Directory.CreateDirectory(output);Application.targetFrameRate=frameLimit;
             yield return new WaitForSecondsRealtime(2);game=GameBootstrap.Instance;
             if(game==null){File.WriteAllText(Path.Combine(output,"smoke-failed.txt"),"No bootstrap");Application.Quit(1);yield break;}
+            // Unattended: another window taking focus must not pause the run and stall its game-time deadlines.
+            game.Input.PauseOnFocusLoss=false;
             game.GetComponent<FlightHUD>().SendMessage("SetPause",false);
+            // The welcome page pauses the game; wait in real time, then dismiss without touching the player's first launch.
             var welcome=game.GetComponent<FlightHUD>();welcome.PreviewFirstRun();
-            yield return new WaitForSeconds(.4f);yield return Capture("00-welcome.png");
-            welcome.DismissFirstRun(false);
+            yield return new WaitForSecondsRealtime(.4f);yield return Capture("00-welcome.png");
+            welcome.DismissFirstRun(false);welcome.SendMessage("SetPause",false);
             game.Input.enabled=false;game.Input.SetPaused(false);game.Aircraft.InputSource=this;
             yield return new WaitForSeconds(.8f);
             startedGrounded=game.Aircraft.Grounded;
@@ -68,11 +71,21 @@ namespace HoverForHire
             hud.SelectMenuPage(1);yield return null;yield return Capture("06-controls.png");
             hud.SelectMenuPage(2);yield return null;yield return Capture("07-bindings.png");
             hud.SelectMenuPage(3);yield return null;yield return Capture("08-assists-camera.png");
+            // Realism: the autorotation drill starts in flight and fails the engine; capture the brief and the warning stack.
+            hud.SendMessage("TogglePause");yield return null;
+            game.Missions.StartTraining(TrainingSession.Autorotation);
+            Command=new PilotCommand(Vector2.zero,0,game.Aircraft.HoverCollective*.95f);
+            yield return new WaitForSeconds(1.5f);yield return Capture("08b-autorotation-drill.png");
+            yield return new WaitForSeconds(2.5f);
+            bool engineFailed=game.Aircraft.EngineFailed&&!game.Aircraft.Crashed;
+            Command=new PilotCommand(Vector2.zero,0,.2f);
+            yield return new WaitForSeconds(1);yield return Capture("08c-engine-failure.png");
+            game.Missions.StartFreeFlight();Command=PilotCommand.Neutral;yield return new WaitForSeconds(1.5f);
             // Scripted 0.49 then 0.47 collective: heave damping should settle near 2 m/s and peak around 18 m.
             // Both bounds matter: a regression toward the old runaway climb (54 m) fails as surely as a weak one.
             bool passed=errors==0&&peakAltitude>=8&&peakAltitude<=32&&peakSpeed>=1.5f&&peakSpeed<=10&&!everCrashed&&startedGrounded&&game.Aircraft.Grounded
-                &&landedHome&&touchdown<2f&&landingOffset<5f;
-            File.WriteAllText(Path.Combine(output,"runtime-smoke.json"),JsonUtility.ToJson(new Report {Errors=errors,Passed=passed,LandedHome=landedHome,LandingTouchdown=touchdown,LandingOffset=landingOffset,ReturnFlightSeconds=returnSeconds,FrameLimit=frameLimit,AverageFps=measuredFrames/Mathf.Max(.1f,Time.unscaledTime-measurementStart),PeakAltitude=peakAltitude,PeakSpeed=peakSpeed,StartedGrounded=startedGrounded,ResetGrounded=game.Aircraft.Grounded,EverCrashed=everCrashed,Engine=Application.unityVersion,PostProcessing=game.CameraRig.GetComponent<Camera>().GetUniversalAdditionalCameraData().renderPostProcessing,Tonemapping=VolumeManager.instance.stack.GetComponent<Tonemapping>().mode.value.ToString(),AmbientProbeL0=RenderSettings.ambientProbe[0,0]},true));
+                &&landedHome&&touchdown<2f&&landingOffset<5f&&engineFailed&&!game.Aircraft.EngineFailed;
+            File.WriteAllText(Path.Combine(output,"runtime-smoke.json"),JsonUtility.ToJson(new Report {Errors=errors,Passed=passed,LandedHome=landedHome,AutorotationDrillEngineFailed=engineFailed,LandingTouchdown=touchdown,LandingOffset=landingOffset,ReturnFlightSeconds=returnSeconds,FrameLimit=frameLimit,AverageFps=measuredFrames/Mathf.Max(.1f,Time.unscaledTime-measurementStart),PeakAltitude=peakAltitude,PeakSpeed=peakSpeed,StartedGrounded=startedGrounded,ResetGrounded=game.Aircraft.Grounded,EverCrashed=everCrashed,Engine=Application.unityVersion,PostProcessing=game.CameraRig.GetComponent<Camera>().GetUniversalAdditionalCameraData().renderPostProcessing,Tonemapping=VolumeManager.instance.stack.GetComponent<Tonemapping>().mode.value.ToString(),AmbientProbeL0=RenderSettings.ambientProbe[0,0]},true));
             if(artTour)yield return Tour();
             Application.Quit(passed&&errors==0?0:1);
         }
@@ -127,7 +140,7 @@ namespace HoverForHire
         void Update(){if(game==null)return;measuredFrames++;if(scriptedSegment){peakAltitude=Mathf.Max(peakAltitude,game.Aircraft.AltitudeAGL);peakSpeed=Mathf.Max(peakSpeed,game.Aircraft.GroundSpeed);}everCrashed|=game.Aircraft.Crashed;}
         void OnLog(string text,string stack,LogType type){if(type==LogType.Error||type==LogType.Exception||type==LogType.Assert)errors++;}
         void OnDestroy()=>Application.logMessageReceived-=OnLog;
-        [Serializable] class Report { public int Errors,FrameLimit;public float AverageFps,PeakAltitude,PeakSpeed,AmbientProbeL0,LandingTouchdown,LandingOffset,ReturnFlightSeconds;public bool Passed,LandedHome,StartedGrounded,ResetGrounded,EverCrashed,PostProcessing;public string Engine,Tonemapping; }
+        [Serializable] class Report { public int Errors,FrameLimit;public float AverageFps,PeakAltitude,PeakSpeed,AmbientProbeL0,LandingTouchdown,LandingOffset,ReturnFlightSeconds;public bool Passed,LandedHome,AutorotationDrillEngineFailed,StartedGrounded,ResetGrounded,EverCrashed,PostProcessing;public string Engine,Tonemapping; }
         [Serializable] class EffectsReport { public bool HardImpactNoExplosion,CatastrophicExplosion,ResetRestored,WaterNoExplosion;public int Errors; }
     }
 }

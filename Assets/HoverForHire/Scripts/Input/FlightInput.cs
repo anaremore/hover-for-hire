@@ -75,12 +75,15 @@ namespace HoverForHire
             Cursor.visible = true;
         }
 
+        /// <summary>Pause when the window loses focus. Unattended diagnostics turn this off: they cannot control focus.</summary>
+        public bool PauseOnFocusLoss { get; set; } = true;
+
         private void OnApplicationFocus(bool focused)
         {
             _skipMouseFrame = true;
             CameraLookDelta = MenuMove = Vector2.zero;
             MenuSubmitPressed = MenuBackPressed = false;
-            if (!focused && !IsPaused)
+            if (!focused && !IsPaused && PauseOnFocusLoss)
             {
                 PauseRequested?.Invoke();
                 if (!IsPaused) SetPaused(true);

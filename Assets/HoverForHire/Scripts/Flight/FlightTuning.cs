@@ -54,6 +54,47 @@ namespace HoverForHire
         [Tooltip("Vertical-fin yaw moment per (lateral airspeed × airspeed), N·m/(m/s)². Turns the nose into the relative wind.")]
         [Min(0f)] public float WeathervaneCoefficient = 3f;
 
+        [Header("Realism effects (switched by RealismSettings; 0 disables each term)")]
+        [Tooltip("Largest thrust gain close to a surface (Cheeseman-Bennett, capped).")]
+        [Range(0f, 0.3f)] public float GroundEffectMaximumGain = 0.15f;
+        [Tooltip("Horizontal airspeed at which ground effect has faded out.")]
+        [Min(1f)] public float GroundEffectFadeSpeed = 15f;
+        [Tooltip("Thrust gain once translational lift is fully established.")]
+        [Range(0f, 0.3f)] public float TranslationalLiftGain = 0.10f;
+        [Min(0f)] public float TranslationalLiftStart = 5f;
+        [Min(0.1f)] public float TranslationalLiftFull = 13f;
+        [Tooltip("Nose-up pitch moment per m/s of forward airspeed (flapback).")]
+        [Min(0f)] public float SpeedStabilityNmPerMs = 14f;
+        [Tooltip("Peak transverse-flow roll moment during the 3-10 m/s transition.")]
+        [Min(0f)] public float TransverseFlowNm = 150f;
+        [Tooltip("Descent rate through the air (m/s) where settling with power begins and where it is fully developed.")]
+        [Min(0.5f)] public float VortexRingOnset = 4.5f;
+        [Min(0.6f)] public float VortexRingFull = 7f;
+        [Tooltip("Thrust lost in a fully developed vortex ring at or below the hover collective.")]
+        [Range(0f, 0.8f)] public float VortexRingThrustLoss = 0.35f;
+        [Tooltip("Growth of that loss per unit of collective above hover: pulling power only strengthens the ring.")]
+        [Min(0f)] public float VortexRingGrowth = 2f;
+        [Range(0f, 0.9f)] public float VortexRingMaximumLoss = 0.7f;
+        [Min(0f)] public float VortexRingBuffetNm = 450f;
+        [Tooltip("Pitch/roll buffet from turbulence at full gustiness.")]
+        [Min(0f)] public float TurbulenceTorqueNm = 300f;
+
+        [Header("Rotor power (used when power limits are on)")]
+        [Tooltip("Main rotor polar moment of inertia; sets how quickly rotor RPM decays with the engine out.")]
+        [Min(10f)] public float RotorInertiaKgM2 = 1400f;
+        [Tooltip("Engine power at 100% torque and governed rotor speed.")]
+        [Min(1000f)] public float EngineRatedPowerW = 270000f;
+        [Tooltip("Largest torque the engine delivers, as a multiple of 100% (the red line).")]
+        [Range(1f, 1.5f)] public float EngineTorqueLimit = 1.1f;
+        [Tooltip("Governor correction per second of rotor-speed error.")]
+        [Min(0f)] public float GovernorGain = 4f;
+        [Min(0f)] public float ProfilePowerW = 30000f;
+        [Range(0.3f, 1f)] public float FigureOfMerit = 0.7f;
+        [Min(0.1f)] public float AirDensity = 1.225f;
+        [Tooltip("Below this fraction of governed speed the blades stall and thrust collapses.")]
+        [Range(0.3f, 0.95f)] public float RotorStallSpeed01 = 0.7f;
+        [Range(1f, 1.4f)] public float MaximumRotorSpeed01 = 1.2f;
+
         [Header("Rotor geometry (aircraft axes: right, up, forward)")]
         [Tooltip("Main rotor hub, matching the imported art.")]
         public Vector3 MainRotorHub = new Vector3(0f, 2.055f, -0.07f);

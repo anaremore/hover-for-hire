@@ -51,7 +51,10 @@ namespace HoverForHire
                 for(int n=0;n<24;n++) { float a=n*15*Mathf.Deg2Rad; var marker=Piece("Perimeter",PrimitiveType.Cube,p+new Vector3(Mathf.Sin(a)*(radius-1),.05f,Mathf.Cos(a)*(radius-1)),new Vector3(1.6f,.07f,.4f),Signal,false);marker.transform.rotation=Quaternion.Euler(0,n*15,0); }
                 // The windsock stands outside the rotor's reach from anywhere on the pad.
                 var pole=p+new Vector3(radius+7,3,0); Piece("Windsock pole",PrimitiveType.Cylinder,pole,new Vector3(.15f,3,.15f),White);
-                var sock=Piece("Windsock",PrimitiveType.Capsule,pole+new Vector3(1.1f,2.8f,0),new Vector3(.55f,1.2f,.55f),Signal,false);sock.transform.rotation=Quaternion.Euler(0,0,80);
+                // The sock hangs from a pivot at the pole top that turns downwind and lifts with wind strength.
+                var pivot=new GameObject("Windsock pivot");pivot.transform.SetParent(root);pivot.transform.position=pole+Vector3.up*2.9f;
+                var sock=Piece("Windsock",PrimitiveType.Capsule,new Vector3(0,0,1.15f),new Vector3(.55f,1.2f,.55f),Signal,false,pivot.transform);
+                sock.transform.localRotation=Quaternion.Euler(90,0,0);pivot.AddComponent<WindsockAnimator>();
             }
             EnvironmentScenery.Build(root,sites);
             return zones;
