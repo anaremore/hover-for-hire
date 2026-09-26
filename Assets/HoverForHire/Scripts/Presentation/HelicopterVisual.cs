@@ -39,30 +39,38 @@ namespace HoverForHire
                 ConfigureMaterials(model);
                 foreach (var part in model.GetComponentsInChildren<Transform>())
                 {
-                    if (part.name == "Main rotor (visual only)") rotor = part;
-                    else if (part.name == "Tail rotor (visual only)") tailRotor = part;
+                    if (part.name == "Main rotor (visual only)")
+                        rotor = part;
+                    else if (part.name == "Tail rotor (visual only)")
+                        tailRotor = part;
                     for (int i = 0; i < GaugeNames.Length; i++)
-                        if (part.name == "Gauge needle " + GaugeNames[i]) { gauges[i] = part; gaugeRest[i] = part.localRotation; }
+                        if (part.name == "Gauge needle " + GaugeNames[i])
+                        { gauges[i] = part; gaugeRest[i] = part.localRotation; }
                 }
                 blurTexture = MakeBlurTexture();
                 ownedTextures.Add(blurTexture);
                 float mainRadius = controller.Tuning != null ? controller.Tuning.MainRotorRadius : 4.62f;
                 float tailRadius = controller.Tuning != null ? controller.Tuning.TailRotorRadius : .87f;
-                if (rotor != null) rotorBlur = CreateBlurDisc(rotor, "Main rotor motion blur", .65f, mainRadius, false, out rotorBlurMaterial);
-                if (tailRotor != null) tailBlur = CreateBlurDisc(tailRotor, "Tail rotor motion blur", .12f, tailRadius, true, out tailBlurMaterial);
+                if (rotor != null)
+                    rotorBlur = CreateBlurDisc(rotor, "Main rotor motion blur", .65f, mainRadius, false, out rotorBlurMaterial);
+                if (tailRotor != null)
+                    tailBlur = CreateBlurDisc(tailRotor, "Tail rotor motion blur", .12f, tailRadius, true, out tailBlurMaterial);
             }
-            else Debug.LogError("The HFH-6 aircraft art is missing from Resources/" + AircraftResource, this);
+            else
+                Debug.LogError("The HFH-6 aircraft art is missing from Resources/" + AircraftResource, this);
 
             CockpitMount = new GameObject("Pilot eye").transform;
             CockpitMount.SetParent(transform, false);
             CockpitMount.localPosition = new Vector3(.43f, .63f, .10f);
             CockpitMount.localRotation = Quaternion.Euler(5f, 0, 0);
-            foreach (var child in GetComponentsInChildren<Transform>()) child.gameObject.layer = 8;
+            foreach (var child in GetComponentsInChildren<Transform>())
+                child.gameObject.layer = 8;
 
             // Hull and skids carry ground contact; the nose and tail boxes make the rest of the airframe solid
             // against obstacles. Handling uses FlightTuning inertia, so these shapes do not change flight response.
             AddBox(new Vector3(0, .05f, 0), new Vector3(2, 1.7f, 3.1f));
-            foreach (float side in new[] { -1f, 1f }) AddBox(new Vector3(side, -1.38f, .15f), new Vector3(.2f, .24f, 3.9f));
+            foreach (float side in new[] { -1f, 1f })
+                AddBox(new Vector3(side, -1.38f, .15f), new Vector3(.2f, .24f, 3.9f));
             AddBox(new Vector3(0, -.05f, 1.87f), new Vector3(1.4f, 1.1f, .55f));      // Nose ahead of the hull box.
             AddBox(new Vector3(0, .2f, -2.4f), new Vector3(.55f, .75f, 1.9f));        // Forward tail boom.
             AddBox(new Vector3(0, .58f, -4.2f), new Vector3(.3f, .55f, 1.8f));        // Aft tail boom.
@@ -109,23 +117,41 @@ namespace HoverForHire
             var material = new Material(shader) { name = name + " / flight" };
             Color color = new Color(.045f, .06f, .07f);
             float metal = .4f, smooth = .45f;
-            if (name.Contains("OrangeEnamel")) { color = new Color(.98f, .25f, .035f); metal = .28f; smooth = .63f; }
-            else if (name.Contains("CreamEnamel")) { color = new Color(.92f, .89f, .76f); metal = .18f; smooth = .55f; }
-            else if (name.Contains("BrushedAlloy")) { color = new Color(.42f, .47f, .49f); metal = .84f; smooth = .61f; }
-            else if (name.Contains("DarkAlloy")) { color = new Color(.11f, .13f, .14f); metal = .76f; smooth = .45f; }
-            else if (name.Contains("Rubber")) { color = new Color(.018f, .025f, .027f); metal = 0; smooth = .12f; }
-            else if (name.Contains("CabinFabric")) { color = new Color(.115f, .15f, .155f); metal = 0; smooth = .08f; }
-            else if (name.Contains("CautionYellow")) { color = new Color(1f, .72f, .055f); metal = .12f; smooth = .5f; }
+            if (name.Contains("OrangeEnamel"))
+            { color = new Color(.98f, .25f, .035f); metal = .28f; smooth = .63f; }
+            else if (name.Contains("CreamEnamel"))
+            { color = new Color(.92f, .89f, .76f); metal = .18f; smooth = .55f; }
+            else if (name.Contains("BrushedAlloy"))
+            { color = new Color(.42f, .47f, .49f); metal = .84f; smooth = .61f; }
+            else if (name.Contains("DarkAlloy"))
+            { color = new Color(.11f, .13f, .14f); metal = .76f; smooth = .45f; }
+            else if (name.Contains("Rubber"))
+            { color = new Color(.018f, .025f, .027f); metal = 0; smooth = .12f; }
+            else if (name.Contains("CabinFabric"))
+            { color = new Color(.115f, .15f, .155f); metal = 0; smooth = .08f; }
+            else if (name.Contains("CautionYellow"))
+            { color = new Color(1f, .72f, .055f); metal = .12f; smooth = .5f; }
             else if (name.Contains("CanopyGlass"))
             {
-                color = new Color(.12f, .27f, .31f, .17f); metal = .08f; smooth = .92f;
+                color = new Color(.12f, .27f, .31f, .17f);
+                metal = .08f;
+                smooth = .92f;
                 Transparent(material);
                 material.SetFloat("_Cull", (float)CullMode.Off);
             }
-            else if (name.Contains("LandingLight")) { color = new Color(.85f, .94f, 1); Emission(material, color * 2.2f); }
-            else if (name.Contains("NavigationRed")) { color = new Color(1, .025f, .008f); Emission(material, color * 1.8f); }
-            else if (name.Contains("NavigationGreen")) { color = new Color(.015f, .85f, .29f); Emission(material, color * 1.5f); }
-            else if (name.Contains("DisplayCyan")) { color = new Color(.15f, .65f, .40f); Emission(material, color * .8f); metal = 0; smooth = .25f; }
+            else if (name.Contains("LandingLight"))
+            { color = new Color(.85f, .94f, 1); Emission(material, color * 2.2f); }
+            else if (name.Contains("NavigationRed"))
+            { color = new Color(1, .025f, .008f); Emission(material, color * 1.8f); }
+            else if (name.Contains("NavigationGreen"))
+            { color = new Color(.015f, .85f, .29f); Emission(material, color * 1.5f); }
+            else if (name.Contains("DisplayCyan"))
+            {
+                color = new Color(.15f, .65f, .40f);
+                Emission(material, color * .8f);
+                metal = 0;
+                smooth = .25f;
+            }
             material.SetColor("_BaseColor", color);
             material.SetColor("_Color", color);
             material.SetFloat("_Metallic", metal);
@@ -175,8 +201,12 @@ namespace HoverForHire
                 uv[i * 2] = radial * (inner / outer) * .5f + new Vector2(.5f, .5f);
                 uv[i * 2 + 1] = radial * .5f + new Vector2(.5f, .5f);
                 int next = (i + 1) % segments, t = i * 6;
-                triangles[t] = i * 2; triangles[t + 1] = next * 2; triangles[t + 2] = i * 2 + 1;
-                triangles[t + 3] = i * 2 + 1; triangles[t + 4] = next * 2; triangles[t + 5] = next * 2 + 1;
+                triangles[t] = i * 2;
+                triangles[t + 1] = next * 2;
+                triangles[t + 2] = i * 2 + 1;
+                triangles[t + 3] = i * 2 + 1;
+                triangles[t + 4] = next * 2;
+                triangles[t + 5] = next * 2 + 1;
             }
             var mesh = new Mesh { name = name + " disc", vertices = vertices, uv = uv, triangles = triangles };
             mesh.RecalculateNormals();
@@ -226,15 +256,18 @@ namespace HoverForHire
 
         void Update()
         {
-            if (aircraft == null) return;
+            if (aircraft == null)
+                return;
             float rpm = aircraft.RotorRpm, speed01 = aircraft.RotorSpeed01;
             SetGauge(0, Mathf.Lerp(-130, 130, Mathf.Clamp01(aircraft.Airspeed * 1.9438445f / 140)));
             SetGauge(1, Mathf.Lerp(-130, 130, Mathf.Clamp01(aircraft.AltitudeAGL / 1000)));
             SetGauge(2, Mathf.Lerp(-130, 130, Mathf.InverseLerp(-10, 10, aircraft.VerticalSpeed)));
             SetGauge(3, Mathf.Lerp(-130, 130, aircraft.RotorSpeed01));
             SetGauge(4, aircraft.Heading);
-            if (rotor != null) rotor.Rotate(Vector3.up, ApparentStep(rpm * 6 * Time.deltaTime, MainBlades, speed01), Space.Self);
-            if (tailRotor != null) tailRotor.Rotate(Vector3.right, ApparentStep(rpm * 18 * Time.deltaTime, TailBlades, speed01), Space.Self);
+            if (rotor != null)
+                rotor.Rotate(Vector3.up, ApparentStep(rpm * 6 * Time.deltaTime, MainBlades, speed01), Space.Self);
+            if (tailRotor != null)
+                tailRotor.Rotate(Vector3.right, ApparentStep(rpm * 18 * Time.deltaTime, TailBlades, speed01), Space.Self);
             float blur = aircraft.Crashed ? 0 : Mathf.SmoothStep(0, 1, Mathf.InverseLerp(BlurStartSpeed01, 1, speed01));
             SetBlur(rotorBlur, rotorBlurMaterial, blur * .38f);
             SetBlur(tailBlur, tailBlurMaterial, blur * .38f);
@@ -243,27 +276,37 @@ namespace HoverForHire
         /// <summary>Blade advance for this frame, capped below the strobing threshold once the rotor is at speed.</summary>
         public static float ApparentStep(float trueDegrees, int blades, float speed01)
         {
-            if (speed01 < BlurStartSpeed01) return trueDegrees;
+            if (speed01 < BlurStartSpeed01)
+                return trueDegrees;
             return Mathf.Min(trueDegrees, 360f / blades * MaximumApparentStep);
         }
 
         static void SetBlur(Renderer renderer, Material material, float alpha)
         {
-            if (renderer == null) return;
+            if (renderer == null)
+                return;
             renderer.enabled = alpha > .01f;
-            if (renderer.enabled) material.SetColor("_BaseColor", new Color(1, 1, 1, alpha));
+            if (renderer.enabled)
+                material.SetColor("_BaseColor", new Color(1, 1, 1, alpha));
         }
 
         void SetGauge(int index, float degrees)
         {
-            if (gauges[index] != null) gauges[index].localRotation = gaugeRest[index] * Quaternion.AngleAxis(-degrees, Vector3.forward);
+            if (gauges[index] != null)
+                gauges[index].localRotation = gaugeRest[index] * Quaternion.AngleAxis(-degrees, Vector3.forward);
         }
 
         void OnDestroy()
         {
-            foreach (var material in ownedMaterials) if (material != null) Destroy(material);
-            foreach (var mesh in ownedMeshes) if (mesh != null) Destroy(mesh);
-            foreach (var texture in ownedTextures) if (texture != null) Destroy(texture);
+            foreach (var material in ownedMaterials)
+                if (material != null)
+                    Destroy(material);
+            foreach (var mesh in ownedMeshes)
+                if (mesh != null)
+                    Destroy(mesh);
+            foreach (var texture in ownedTextures)
+                if (texture != null)
+                    Destroy(texture);
         }
     }
 }

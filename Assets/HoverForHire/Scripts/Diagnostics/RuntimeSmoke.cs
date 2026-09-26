@@ -10,146 +10,245 @@ namespace HoverForHire
     /// <summary>Opt-in development-build smoke flight. Never enabled during ordinary play.</summary>
     public sealed class RuntimeSmoke : MonoBehaviour, IFlightInput
     {
-        public PilotCommand Command {get;private set;}
+        public PilotCommand Command { get; private set; }
         GameBootstrap game; string output; bool artTour;
-        int errors,frameLimit=120,measuredFrames;float peakAltitude,peakSpeed,measurementStart;bool everCrashed,startedGrounded,scriptedSegment=true;
+        int errors, frameLimit = 120, measuredFrames;
+        float peakAltitude, peakSpeed, measurementStart;
+        bool everCrashed, startedGrounded, scriptedSegment = true;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void EnableOnRequest()
         {
-            var args=Environment.GetCommandLineArgs();
-            for(int i=0;i<args.Length-1;i++)if(args[i]=="-hover-smoke")
-            {
-                var smoke=new GameObject("Opt-in runtime smoke").AddComponent<RuntimeSmoke>();smoke.output=args[i+1];
-                smoke.artTour=Array.IndexOf(args,"-hover-art")>=0;
-                for(int n=0;n<args.Length-1;n++)if(args[n]=="-hover-fps"&&int.TryParse(args[n+1],out int fps))smoke.frameLimit=Mathf.Clamp(fps,20,240);
-                break;
-            }
+            var args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+                if (args[i] == "-hover-smoke")
+                {
+                    var smoke = new GameObject("Opt-in runtime smoke").AddComponent<RuntimeSmoke>();
+                    smoke.output = args[i + 1];
+                    smoke.artTour = Array.IndexOf(args, "-hover-art") >= 0;
+                    for (int n = 0; n < args.Length - 1; n++)
+                        if (args[n] == "-hover-fps" && int.TryParse(args[n + 1], out int fps))
+                            smoke.frameLimit = Mathf.Clamp(fps, 20, 240);
+                    break;
+                }
         }
         IEnumerator Start()
         {
-            Application.logMessageReceived+=OnLog;Directory.CreateDirectory(output);Application.targetFrameRate=frameLimit;
-            yield return new WaitForSecondsRealtime(2);game=GameBootstrap.Instance;
-            if(game==null){File.WriteAllText(Path.Combine(output,"smoke-failed.txt"),"No bootstrap");Application.Quit(1);yield break;}
+            Application.logMessageReceived += OnLog;
+            Directory.CreateDirectory(output);
+            Application.targetFrameRate = frameLimit;
+            yield return new WaitForSecondsRealtime(2);
+            game = GameBootstrap.Instance;
+            if (game == null)
+            {
+                File.WriteAllText(Path.Combine(output, "smoke-failed.txt"), "No bootstrap");
+                Application.Quit(1);
+                yield break;
+            }
             // Unattended: another window taking focus must not pause the run and stall its game-time deadlines.
-            game.Input.PauseOnFocusLoss=false;
-            game.GetComponent<FlightHUD>().SendMessage("SetPause",false);
+            game.Input.PauseOnFocusLoss = false;
+            game.GetComponent<FlightHUD>().SendMessage("SetPause", false);
             // The welcome page pauses the game; wait in real time, then dismiss without touching the player's first launch.
-            var welcome=game.GetComponent<FlightHUD>();welcome.PreviewFirstRun();
-            yield return new WaitForSecondsRealtime(.4f);yield return Capture("00-welcome.png");
-            welcome.DismissFirstRun(false);welcome.SendMessage("SetPause",false);
-            game.Input.enabled=false;game.Input.SetPaused(false);game.Aircraft.InputSource=this;
+            var welcome = game.GetComponent<FlightHUD>();
+            welcome.PreviewFirstRun();
+            yield return new WaitForSecondsRealtime(.4f);
+            yield return Capture("00-welcome.png");
+            welcome.DismissFirstRun(false);
+            welcome.SendMessage("SetPause", false);
+            game.Input.enabled = false;
+            game.Input.SetPaused(false);
+            game.Aircraft.InputSource = this;
             yield return new WaitForSeconds(.8f);
-            startedGrounded=game.Aircraft.Grounded;
-            everCrashed|=game.Aircraft.Crashed;
-            measurementStart=Time.unscaledTime;measuredFrames=0;
+            startedGrounded = game.Aircraft.Grounded;
+            everCrashed |= game.Aircraft.Crashed;
+            measurementStart = Time.unscaledTime;
+            measuredFrames = 0;
             yield return Capture("01-home.png");
             // Record the listener's mix through the climb and the engine failure for offline sound analysis.
-            var tap=game.CameraRig.gameObject.AddComponent<AudioTap>();tap.Begin(10);
-            Command=new PilotCommand(Vector2.zero,0,.49f);
+            var tap = game.CameraRig.gameObject.AddComponent<AudioTap>();
+            tap.Begin(10);
+            Command = new PilotCommand(Vector2.zero, 0, .49f);
             game.Input.ResetCommand(.49f);
             yield return new WaitForSeconds(8);
-            tap.Save(Path.Combine(output,"audio-climb.wav"));
+            tap.Save(Path.Combine(output, "audio-climb.wav"));
             yield return Capture("02-climb.png");
-            Command=new PilotCommand(new Vector2(0,.12f),0,.47f);
+            Command = new PilotCommand(new Vector2(0, .12f), 0, .47f);
             game.Input.ResetCommand(.47f);
             yield return new WaitForSeconds(3);
-            Command=new PilotCommand(Vector2.zero,0,.47f);
+            Command = new PilotCommand(Vector2.zero, 0, .47f);
             yield return new WaitForSeconds(2);
             yield return Capture("03-forward.png");
-            game.CameraRig.ToggleCamera();yield return new WaitForSeconds(1);yield return Capture("04-cockpit.png");
+            game.CameraRig.ToggleCamera();
+            yield return new WaitForSeconds(1);
+            yield return Capture("04-cockpit.png");
             game.CameraRig.ToggleCamera();
             // The scripted segment ends here; the altitude band applies to it. The autopilot then flies the
             // aircraft back and lands it on the home pad through ordinary pilot commands (no teleport).
-            scriptedSegment=false;
-            var autopilot=gameObject.AddComponent<Autopilot>();autopilot.Aircraft=game.Aircraft;game.Aircraft.InputSource=autopilot;
-            Vector3 home=game.Zones[0].transform.position;autopilot.FlyTo(home);
-            float deadline=Time.time+120;
-            while(autopilot.Current!=Autopilot.Phase.Landed&&!game.Aircraft.Crashed&&Time.time<deadline)yield return null;
-            yield return new WaitForSeconds(.5f);yield return Capture("04b-landed.png");
-            bool landedHome=autopilot.Current==Autopilot.Phase.Landed&&!game.Aircraft.Crashed;
-            float landingOffset=Vector2.Distance(new Vector2(game.Aircraft.Body.position.x,game.Aircraft.Body.position.z),new Vector2(home.x,home.z));
-            float touchdown=autopilot.TouchdownSpeed,returnSeconds=autopilot.FlightSeconds;
-            game.Aircraft.InputSource=this;Command=PilotCommand.Neutral;Destroy(autopilot);yield return new WaitForSeconds(1);
-            var hud=game.GetComponent<FlightHUD>();hud.SendMessage("TogglePause");yield return null;yield return Capture("05-menu.png");
-            hud.SelectMenuPage(1);yield return null;yield return Capture("06-controls.png");
-            hud.SelectMenuPage(2);yield return null;yield return Capture("07-bindings.png");
-            hud.SelectMenuPage(3);yield return null;yield return Capture("08-assists-camera.png");
-            hud.SelectMenuPage(4);yield return null;yield return Capture("08a-view-sound.png");
+            scriptedSegment = false;
+            var autopilot = gameObject.AddComponent<Autopilot>();
+            autopilot.Aircraft = game.Aircraft;
+            game.Aircraft.InputSource = autopilot;
+            Vector3 home = game.Zones[0].transform.position;
+            autopilot.FlyTo(home);
+            float deadline = Time.time + 120;
+            while (autopilot.Current != Autopilot.Phase.Landed && !game.Aircraft.Crashed && Time.time < deadline)
+                yield return null;
+            yield return new WaitForSeconds(.5f);
+            yield return Capture("04b-landed.png");
+            bool landedHome = autopilot.Current == Autopilot.Phase.Landed && !game.Aircraft.Crashed;
+            float landingOffset = Vector2.Distance(new Vector2(game.Aircraft.Body.position.x, game.Aircraft.Body.position.z), new Vector2(home.x, home.z));
+            float touchdown = autopilot.TouchdownSpeed, returnSeconds = autopilot.FlightSeconds;
+            game.Aircraft.InputSource = this;
+            Command = PilotCommand.Neutral;
+            Destroy(autopilot);
+            yield return new WaitForSeconds(1);
+            var hud = game.GetComponent<FlightHUD>();
+            hud.SendMessage("TogglePause");
+            yield return null;
+            yield return Capture("05-menu.png");
+            hud.SelectMenuPage(1);
+            yield return null;
+            yield return Capture("06-controls.png");
+            hud.SelectMenuPage(2);
+            yield return null;
+            yield return Capture("07-bindings.png");
+            hud.SelectMenuPage(3);
+            yield return null;
+            yield return Capture("08-assists-camera.png");
+            hud.SelectMenuPage(4);
+            yield return null;
+            yield return Capture("08a-view-sound.png");
             // Realism: the autorotation drill starts in flight and fails the engine; capture the brief and the warning stack.
-            hud.SendMessage("TogglePause");yield return null;
-            game.Missions.StartTraining(TrainingSession.Autorotation);tap.Begin(7);
-            Command=new PilotCommand(Vector2.zero,0,game.Aircraft.HoverCollective*.95f);
-            yield return new WaitForSeconds(1.5f);yield return Capture("08b-autorotation-drill.png");
+            hud.SendMessage("TogglePause");
+            yield return null;
+            game.Missions.StartTraining(TrainingSession.Autorotation);
+            tap.Begin(7);
+            Command = new PilotCommand(Vector2.zero, 0, game.Aircraft.HoverCollective * .95f);
+            yield return new WaitForSeconds(1.5f);
+            yield return Capture("08b-autorotation-drill.png");
             yield return new WaitForSeconds(2.5f);
-            bool engineFailed=game.Aircraft.EngineFailed&&!game.Aircraft.Crashed;
-            Command=new PilotCommand(Vector2.zero,0,.2f);
-            yield return new WaitForSeconds(1);tap.Save(Path.Combine(output,"audio-autorotation.wav"));yield return Capture("08c-engine-failure.png");
+            bool engineFailed = game.Aircraft.EngineFailed && !game.Aircraft.Crashed;
+            Command = new PilotCommand(Vector2.zero, 0, .2f);
+            yield return new WaitForSeconds(1);
+            tap.Save(Path.Combine(output, "audio-autorotation.wav"));
+            yield return Capture("08c-engine-failure.png");
             // Crosswind drill in aviation units: wind indicator, hover display and unit conversion in one frame.
-            UnitSystem units=hud.Settings.Units;hud.SetUnits(UnitSystem.Aviation);
-            game.Missions.StartTraining(TrainingSession.Crosswind);Command=PilotCommand.Neutral;
-            yield return new WaitForSeconds(2f);yield return Capture("08d-crosswind-aviation.png");
+            UnitSystem units = hud.Settings.Units;
+            hud.SetUnits(UnitSystem.Aviation);
+            game.Missions.StartTraining(TrainingSession.Crosswind);
+            Command = PilotCommand.Neutral;
+            yield return new WaitForSeconds(2f);
+            yield return Capture("08d-crosswind-aviation.png");
             hud.SetUnits(units);
-            game.Missions.StartFreeFlight();Command=PilotCommand.Neutral;yield return new WaitForSeconds(1.5f);
+            game.Missions.StartFreeFlight();
+            Command = PilotCommand.Neutral;
+            yield return new WaitForSeconds(1.5f);
             // Scripted 0.49 then 0.47 collective: heave damping should settle near 2 m/s and peak around 18 m.
             // Both bounds matter: a regression toward the old runaway climb (54 m) fails as surely as a weak one.
-            bool passed=errors==0&&peakAltitude>=8&&peakAltitude<=32&&peakSpeed>=1.5f&&peakSpeed<=10&&!everCrashed&&startedGrounded&&game.Aircraft.Grounded
-                &&landedHome&&touchdown<2f&&landingOffset<5f&&engineFailed&&!game.Aircraft.EngineFailed;
-            File.WriteAllText(Path.Combine(output,"runtime-smoke.json"),JsonUtility.ToJson(new Report {Errors=errors,Passed=passed,LandedHome=landedHome,AutorotationDrillEngineFailed=engineFailed,LandingTouchdown=touchdown,LandingOffset=landingOffset,ReturnFlightSeconds=returnSeconds,FrameLimit=frameLimit,AverageFps=measuredFrames/Mathf.Max(.1f,Time.unscaledTime-measurementStart),PeakAltitude=peakAltitude,PeakSpeed=peakSpeed,StartedGrounded=startedGrounded,ResetGrounded=game.Aircraft.Grounded,EverCrashed=everCrashed,Engine=Application.unityVersion,PostProcessing=game.CameraRig.GetComponent<Camera>().GetUniversalAdditionalCameraData().renderPostProcessing,Tonemapping=VolumeManager.instance.stack.GetComponent<Tonemapping>().mode.value.ToString(),AmbientProbeL0=RenderSettings.ambientProbe[0,0]},true));
-            if(artTour)yield return Tour();
-            Application.Quit(passed&&errors==0?0:1);
+            bool passed = errors == 0 && peakAltitude >= 8 && peakAltitude <= 32 && peakSpeed >= 1.5f && peakSpeed <= 10 && !everCrashed && startedGrounded && game.Aircraft.Grounded
+                && landedHome && touchdown < 2f && landingOffset < 5f && engineFailed && !game.Aircraft.EngineFailed;
+            File.WriteAllText(Path.Combine(output, "runtime-smoke.json"), JsonUtility.ToJson(new Report { Errors = errors, Passed = passed, LandedHome = landedHome, AutorotationDrillEngineFailed = engineFailed, LandingTouchdown = touchdown, LandingOffset = landingOffset, ReturnFlightSeconds = returnSeconds, FrameLimit = frameLimit, AverageFps = measuredFrames / Mathf.Max(.1f, Time.unscaledTime - measurementStart), PeakAltitude = peakAltitude, PeakSpeed = peakSpeed, StartedGrounded = startedGrounded, ResetGrounded = game.Aircraft.Grounded, EverCrashed = everCrashed, Engine = Application.unityVersion, PostProcessing = game.CameraRig.GetComponent<Camera>().GetUniversalAdditionalCameraData().renderPostProcessing, Tonemapping = VolumeManager.instance.stack.GetComponent<Tonemapping>().mode.value.ToString(), AmbientProbeL0 = RenderSettings.ambientProbe[0, 0] }, true));
+            if (artTour)
+                yield return Tour();
+            Application.Quit(passed && errors == 0 ? 0 : 1);
         }
         IEnumerator Tour()
         {
             // Fixed photo viewpoints only run after the actual physics smoke result is saved.
-            var hud=game.GetComponent<FlightHUD>(); hud.SendMessage("SetPause",false); hud.enabled=false;
-            game.CameraRig.enabled=false; game.Aircraft.enabled=false; game.Aircraft.Body.isKinematic=true;
-            var camera=game.CameraRig.GetComponent<Camera>(); camera.fieldOfView=48;
-            Vector3 origin=game.Aircraft.transform.position;
-            camera.transform.SetPositionAndRotation(origin+new Vector3(8,2.6f,10),Quaternion.LookRotation(origin+Vector3.up*.25f-(origin+new Vector3(8,2.6f,10))));
-            yield return new WaitForSeconds(.5f); yield return Capture("09-aircraft.png");
-            camera.fieldOfView=65; camera.transform.SetPositionAndRotation(new Vector3(-540,130,-680),Quaternion.LookRotation(new Vector3(-180,25,-170)-new Vector3(-540,130,-680)));
+            var hud = game.GetComponent<FlightHUD>();
+            hud.SendMessage("SetPause", false);
+            hud.enabled = false;
+            game.CameraRig.enabled = false;
+            game.Aircraft.enabled = false;
+            game.Aircraft.Body.isKinematic = true;
+            var camera = game.CameraRig.GetComponent<Camera>();
+            camera.fieldOfView = 48;
+            Vector3 origin = game.Aircraft.transform.position;
+            camera.transform.SetPositionAndRotation(origin + new Vector3(8, 2.6f, 10), Quaternion.LookRotation(origin + Vector3.up * .25f - (origin + new Vector3(8, 2.6f, 10))));
+            yield return new WaitForSeconds(.5f);
+            yield return Capture("09-aircraft.png");
+            camera.fieldOfView = 65;
+            camera.transform.SetPositionAndRotation(new Vector3(-540, 130, -680), Quaternion.LookRotation(new Vector3(-180, 25, -170) - new Vector3(-540, 130, -680)));
             yield return Capture("10-town.png");
-            camera.transform.SetPositionAndRotation(new Vector3(-1140,85,-340),Quaternion.LookRotation(new Vector3(-880,5,-205)-new Vector3(-1140,85,-340)));
+            camera.transform.SetPositionAndRotation(new Vector3(-1140, 85, -340), Quaternion.LookRotation(new Vector3(-880, 5, -205) - new Vector3(-1140, 85, -340)));
             yield return Capture("11-harbor.png");
-            camera.transform.SetPositionAndRotation(new Vector3(-470,190,260),Quaternion.LookRotation(new Vector3(-350,105,450)-new Vector3(-470,190,260)));
+            camera.transform.SetPositionAndRotation(new Vector3(-470, 190, 260), Quaternion.LookRotation(new Vector3(-350, 105, 450) - new Vector3(-470, 190, 260)));
             yield return Capture("12-highlands.png");
-            camera.transform.SetPositionAndRotation(new Vector3(-915,115,510),Quaternion.LookRotation(new Vector3(-700,25,420)-new Vector3(-915,115,510)));
+            camera.transform.SetPositionAndRotation(new Vector3(-915, 115, 510), Quaternion.LookRotation(new Vector3(-700, 25, 420) - new Vector3(-915, 115, 510)));
             yield return Capture("13-coast.png");
             // Visual effects diagnostics use explicit presentation events, after the flight assertion.
-            var effects=game.Aircraft.GetComponent<AircraftEffects>();
-            camera.fieldOfView=52;
-            Vector3 home=game.Zones[0].transform.position;
-            game.Aircraft.Body.isKinematic=false;game.Aircraft.enabled=true;
-            game.Aircraft.ResetAt(home+Vector3.up*3.5f,Quaternion.identity);
-            Command=new PilotCommand(Vector2.zero,0,.45f);
-            camera.transform.SetPositionAndRotation(home+new Vector3(11,4,13),Quaternion.LookRotation(home+Vector3.up*1.5f-(home+new Vector3(11,4,13))));
-            yield return new WaitForSeconds(2);yield return Capture("14-rotor-wash.png");
-            Command=PilotCommand.Neutral;game.Aircraft.enabled=false;game.Aircraft.Body.isKinematic=true;
-            effects.PresentImpact(new AircraftImpact(home+Vector3.up*.1f,Vector3.up,Vector3.down*7,7,1050));
-            yield return new WaitForSeconds(.25f);yield return Capture("15-hard-impact.png");
-            bool graded=!effects.HasExploded;effects.ResetEffects();
-            effects.PresentImpact(new AircraftImpact(home+Vector3.up*.3f,Vector3.up,Vector3.down*25,25,1050));
-            game.Aircraft.ReportCrash(CrashCause.ObstacleImpact,25f,game.Aircraft.Tuning.CrashImpactSpeed,"Island terrain");
-            yield return new WaitForSeconds(.18f);yield return Capture("16-explosion.png");
-            bool explosion=effects.HasExploded&&effects.ActiveDebrisCount>0;
-            yield return new WaitForSeconds(1.2f);yield return Capture("17-wreckage.png");
-            hud.enabled=true;yield return null;yield return Capture("17b-crash-report.png");hud.enabled=false;
-            game.Aircraft.ResetAt(home+Vector3.up*1.55f,Quaternion.identity);
-            bool restored=!effects.HasExploded&&effects.ActiveDebrisCount==0;
-            Vector3 ocean=new Vector3(-1250,WorldConstants.SeaLevel,-600);
-            game.Aircraft.ResetAt(ocean+Vector3.up*.5f,Quaternion.identity);
-            camera.transform.SetPositionAndRotation(ocean+new Vector3(11,4,13),Quaternion.LookRotation(ocean-(ocean+new Vector3(11,4,13))));
-            effects.PresentImpact(new AircraftImpact(ocean,Vector3.up,Vector3.down*30,30,1050,true));
-            yield return new WaitForSeconds(.2f);yield return Capture("18-water-spray.png");
-            bool water=!effects.HasExploded;effects.ResetEffects();
-            File.WriteAllText(Path.Combine(output,"effects-smoke.json"),JsonUtility.ToJson(new EffectsReport{HardImpactNoExplosion=graded,CatastrophicExplosion=explosion,ResetRestored=restored,WaterNoExplosion=water,Errors=errors},true));
-            if(!graded||!explosion||!restored||!water)errors++;
+            var effects = game.Aircraft.GetComponent<AircraftEffects>();
+            camera.fieldOfView = 52;
+            Vector3 home = game.Zones[0].transform.position;
+            game.Aircraft.Body.isKinematic = false;
+            game.Aircraft.enabled = true;
+            game.Aircraft.ResetAt(home + Vector3.up * 3.5f, Quaternion.identity);
+            Command = new PilotCommand(Vector2.zero, 0, .45f);
+            camera.transform.SetPositionAndRotation(home + new Vector3(11, 4, 13), Quaternion.LookRotation(home + Vector3.up * 1.5f - (home + new Vector3(11, 4, 13))));
+            yield return new WaitForSeconds(2);
+            yield return Capture("14-rotor-wash.png");
+            Command = PilotCommand.Neutral;
+            game.Aircraft.enabled = false;
+            game.Aircraft.Body.isKinematic = true;
+            effects.PresentImpact(new AircraftImpact(home + Vector3.up * .1f, Vector3.up, Vector3.down * 7, 7, 1050));
+            yield return new WaitForSeconds(.25f);
+            yield return Capture("15-hard-impact.png");
+            bool graded = !effects.HasExploded;
+            effects.ResetEffects();
+            effects.PresentImpact(new AircraftImpact(home + Vector3.up * .3f, Vector3.up, Vector3.down * 25, 25, 1050));
+            game.Aircraft.ReportCrash(CrashCause.ObstacleImpact, 25f, game.Aircraft.Tuning.CrashImpactSpeed, "Island terrain");
+            yield return new WaitForSeconds(.18f);
+            yield return Capture("16-explosion.png");
+            bool explosion = effects.HasExploded && effects.ActiveDebrisCount > 0;
+            yield return new WaitForSeconds(1.2f);
+            yield return Capture("17-wreckage.png");
+            hud.enabled = true;
+            yield return null;
+            yield return Capture("17b-crash-report.png");
+            hud.enabled = false;
+            game.Aircraft.ResetAt(home + Vector3.up * 1.55f, Quaternion.identity);
+            bool restored = !effects.HasExploded && effects.ActiveDebrisCount == 0;
+            Vector3 ocean = new Vector3(-1250, WorldConstants.SeaLevel, -600);
+            game.Aircraft.ResetAt(ocean + Vector3.up * .5f, Quaternion.identity);
+            camera.transform.SetPositionAndRotation(ocean + new Vector3(11, 4, 13), Quaternion.LookRotation(ocean - (ocean + new Vector3(11, 4, 13))));
+            effects.PresentImpact(new AircraftImpact(ocean, Vector3.up, Vector3.down * 30, 30, 1050, true));
+            yield return new WaitForSeconds(.2f);
+            yield return Capture("18-water-spray.png");
+            bool water = !effects.HasExploded;
+            effects.ResetEffects();
+            File.WriteAllText(Path.Combine(output, "effects-smoke.json"), JsonUtility.ToJson(new EffectsReport { HardImpactNoExplosion = graded, CatastrophicExplosion = explosion, ResetRestored = restored, WaterNoExplosion = water, Errors = errors }, true));
+            if (!graded || !explosion || !restored || !water)
+                errors++;
         }
-        IEnumerator Capture(string file){yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,file));yield return new WaitForSecondsRealtime(.6f);}
-        void Update(){if(game==null)return;measuredFrames++;if(scriptedSegment){peakAltitude=Mathf.Max(peakAltitude,game.Aircraft.AltitudeAGL);peakSpeed=Mathf.Max(peakSpeed,game.Aircraft.GroundSpeed);}everCrashed|=game.Aircraft.Crashed;}
-        void OnLog(string text,string stack,LogType type){if(type==LogType.Error||type==LogType.Exception||type==LogType.Assert)errors++;}
-        void OnDestroy()=>Application.logMessageReceived-=OnLog;
-        [Serializable] class Report { public int Errors,FrameLimit;public float AverageFps,PeakAltitude,PeakSpeed,AmbientProbeL0,LandingTouchdown,LandingOffset,ReturnFlightSeconds;public bool Passed,LandedHome,AutorotationDrillEngineFailed,StartedGrounded,ResetGrounded,EverCrashed,PostProcessing;public string Engine,Tonemapping; }
-        [Serializable] class EffectsReport { public bool HardImpactNoExplosion,CatastrophicExplosion,ResetRestored,WaterNoExplosion;public int Errors; }
+        IEnumerator Capture(string file)
+        {
+            yield return new WaitForEndOfFrame();
+            ScreenCapture.CaptureScreenshot(Path.Combine(output, file));
+            yield return new WaitForSecondsRealtime(.6f);
+        }
+        void Update()
+        {
+            if (game == null)
+                return;
+            measuredFrames++;
+            if (scriptedSegment)
+            { peakAltitude = Mathf.Max(peakAltitude, game.Aircraft.AltitudeAGL); peakSpeed = Mathf.Max(peakSpeed, game.Aircraft.GroundSpeed); }
+            everCrashed |= game.Aircraft.Crashed;
+        }
+        void OnLog(string text, string stack, LogType type) { if (type == LogType.Error || type == LogType.Exception || type == LogType.Assert) errors++; }
+        void OnDestroy() => Application.logMessageReceived -= OnLog;
+        [Serializable]
+        class Report
+        {
+            public int Errors, FrameLimit;
+            public float AverageFps, PeakAltitude, PeakSpeed, AmbientProbeL0, LandingTouchdown, LandingOffset, ReturnFlightSeconds;
+            public bool Passed, LandedHome, AutorotationDrillEngineFailed, StartedGrounded, ResetGrounded, EverCrashed, PostProcessing;
+            public string Engine, Tonemapping;
+        }
+        [Serializable]
+        class EffectsReport
+        {
+            public bool HardImpactNoExplosion, CatastrophicExplosion, ResetRestored, WaterNoExplosion;
+            public int Errors;
+        }
     }
 }
