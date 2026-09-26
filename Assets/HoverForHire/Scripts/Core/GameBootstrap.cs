@@ -21,6 +21,7 @@ namespace HoverForHire
             IslandAtmosphere.ConfigureWorld(sun);
             var go=new GameObject("M-04 / utility helicopter");go.SetActive(false);go.layer=8;go.transform.position=Zones[0].transform.position+Vector3.up*1.55f;
             go.AddComponent<Rigidbody>();Input=go.AddComponent<FlightInput>();Aircraft=go.AddComponent<HelicopterController>();Aircraft.InputSource=Input;Aircraft.Tuning=Resources.Load<FlightTuning>("UtilityHelicopter");
+            Aircraft.WaterSurfaceHeight=WorldConstants.SeaLevel;Aircraft.RotorClearanceMask=WorldConstants.RotorClearanceMask;
             var visual=go.AddComponent<HelicopterVisual>();visual.Build(Aircraft);go.SetActive(true);
             var cameraObject=new GameObject("Pilot camera",typeof(Camera),typeof(AudioListener));var camera=cameraObject.GetComponent<Camera>();camera.nearClipPlane=.05f;camera.farClipPlane=7000;camera.backgroundColor=RenderSettings.fogColor;camera.clearFlags=CameraClearFlags.SolidColor;cameraObject.tag="MainCamera";
             IslandAtmosphere.ConfigureCamera(camera);
@@ -34,7 +35,7 @@ namespace HoverForHire
         }
         void FixedUpdate()
         {
-            if(Aircraft!=null && !Aircraft.Crashed && Aircraft.Body.position.y < -5f) Aircraft.ReportCrash();
+            if(Aircraft!=null && !Aircraft.Crashed && Aircraft.Body.position.y < WorldConstants.SeaLevel-1.5f) Aircraft.ReportCrash(CrashCause.OutOfBounds);
         }
         void OnDestroy(){if(Instance==this)Instance=null;Time.timeScale=1;Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
     }

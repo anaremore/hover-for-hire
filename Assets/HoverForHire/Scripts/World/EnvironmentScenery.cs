@@ -17,7 +17,10 @@ namespace HoverForHire
         static Material Roof=>IslandWorld.Roof;
         static Material Metal=>IslandWorld.Metal;
         static Material Signal=>IslandWorld.Signal;
-        static float Height(float x,float z)=>IslandWorld.Height(x,z);
+        static float Height(float x,float z)=>IslandWorld.MeshHeight(x,z);
+        static int VegetationLayer=>WorldConstants.VegetationLayer;
+        /// <summary>Road centrelines in world XZ, as built; the navigation chart draws exactly these.</summary>
+        public static IReadOnlyList<Vector2[]> Roads=>roads;
 
         public static void Build(Transform parent,Vector3[] sites)
         {
@@ -78,6 +81,7 @@ namespace HoverForHire
                     Vector2 a=Vector2.Lerp(start,end,j/(float)n),b=Vector2.Lerp(start,end,(j+1)/(float)n),mid=(a+b)*.5f;
                     if(NearPad(new Vector3(mid.x,0,mid.y),25))continue;
                     Strip(mesh,a,b,side,-width*.5f-1,width*.5f+1,.025f,joint);
+                    Skirt(mesh,a,b,side,-width*.5f-1);Skirt(mesh,a,b,side,width*.5f+1);
                     Strip(mesh,a,b,side,-width*.5f,width*.5f,.06f,IslandWorld.Asphalt);
                     Strip(mesh,a,b,side,-width*.5f+.34f,-width*.5f+.47f,.079f,paint);
                     Strip(mesh,a,b,side,width*.5f-.47f,width*.5f-.34f,.079f,paint);
@@ -85,6 +89,12 @@ namespace HoverForHire
                 }
             }
             mesh.Finish(false);
+        }
+        static void Skirt(EnvironmentGeometry batch,Vector2 a,Vector2 b,Vector2 side,float offset)
+        {
+            Vector2 pa=a+side*offset,pb=b+side*offset;
+            batch.Quad(Ground(pa,.025f),Ground(pb,.025f),Ground(pb,-.45f),Ground(pa,-.45f),joint);
+            batch.Quad(Ground(pa,.025f),Ground(pa,-.45f),Ground(pb,-.45f),Ground(pb,.025f),joint);
         }
         static void Strip(EnvironmentGeometry batch,Vector2 a,Vector2 b,Vector2 side,float left,float right,float y,Material material)
         {
@@ -94,6 +104,7 @@ namespace HoverForHire
         {
             var b=new EnvironmentGeometry("MERIDIAN AIR / terminal apron",root);
             b.Box(new Vector3(-425,8.18f,-513),new Vector3(194,1f,122),concrete);
+            b.SolidBox(new Vector3(-425,8.18f,-513),new Vector3(194,1f,122));
             for(int x=0;x<17;x++)b.Box(new Vector3(-520+x*12,8.694f,-513),new Vector3(.05f,.015f,122),joint);
             for(int z=0;z<11;z++)b.Box(new Vector3(-425,8.695f,-573+z*12),new Vector3(194,.015f,.05f),joint);
             b.Box(new Vector3(-425,8.704f,-454),new Vector3(190,.02f,.2f),yellow);
@@ -105,7 +116,7 @@ namespace HoverForHire
                 b.Box(new Vector3(x+5,8.716f,-465),new Vector3(3,.02f,.3f),yellow,40);b.Box(new Vector3(x+5,8.716f,-463),new Vector3(3,.02f,.3f),yellow,-40);
             }
             Vector3 hangar=new Vector3(-491,8.7f,-545);Box("Airport hangar",hangar+Vector3.up*7,new Vector3(52,14,33),blue);
-            b.Gable(hangar+Vector3.up*14,new Vector3(54,4,35),steel);
+            b.Gable(hangar+Vector3.up*14,new Vector3(54,4,35),steel);b.SolidGable(hangar+Vector3.up*14,new Vector3(54,4,35));
             b.Box(hangar+new Vector3(0,5.6f,16.6f),new Vector3(47,10.9f,.2f),tire);
             for(int i=0;i<6;i++)
             {
@@ -124,7 +135,7 @@ namespace HoverForHire
             Sign("RESCUE + SERVICE",new Vector3(-502,12.15f,-467.35f),0,.58f,trim);
             for(int i=0;i<2;i++)
             {
-                Vector3 p=new Vector3(-493+i*11,10.6f,-458);b.Cylinder(p,2.7f,4.2f,trim);b.Cylinder(p+Vector3.up*2.25f,2.78f,.22f,Signal);
+                Vector3 p=new Vector3(-493+i*11,10.6f,-458);b.Cylinder(p,2.7f,4.2f,trim);b.Cylinder(p+Vector3.up*2.25f,2.78f,.22f,Signal);b.SolidCylinder(p,2.78f,4.4f);
                 b.Box(p+new Vector3(0,.9f,2.72f),new Vector3(2,.5f,.08f),Signal);
             }
             for(int i=0;i<6;i++)Bollard(b,new Vector3(-504+i*4,8.73f,-454));
@@ -151,8 +162,9 @@ namespace HoverForHire
                     {
                         float front=pz+d*.5f+.19f;b.Box(new Vector3(px,y+2.65f,front+1),new Vector3(w-3,.25f,2.4f),x%2==0?teal:coral);
                         for(int s=0;s<4;s++)b.Box(new Vector3(px-w*.36f+s*w*.24f,y+1.25f,front),new Vector3(w*.16f,2.1f,.16f),glazing);
-                        string[] shops={"COASTAL CAFE","ISLAND MARKET","MERIDIAN MOTORS","FERRY SUPPLY","PALM HOTEL","PACIFIC RADIO"};
-                        Sign(shops[x],new Vector3(px,y+3.7f,front+.07f),0,.54f,trim);
+                        string[] shops={"COASTAL CAFE","ISLAND MARKET","MERIDIAN MOTORS","FERRY SUPPLY","PALM HOTEL","PACIFIC RADIO",
+                            "HARBOUR BAKERY","TIDE PHARMACY","SEAGLASS BOOKS","MARINA HARDWARE","LIGHTHOUSE DINER","ORCHARD GROCER"};
+                        Sign(shops[(district*6+x)%shops.Length],new Vector3(px,y+3.7f,front+.07f),0,.54f,trim);
                     }
                     for(int t=0;t<2;t++)Tree(b,new Vector3(px+(t==0?-22:22),y,pz+20),6.5f+t,2+(x+t)%3,false);
                     if(x%2==0)Vehicle(b,new Vector3(px+17,y+.27f,pz-21),x%3==0?yellow:coral,90,false);
@@ -174,9 +186,10 @@ namespace HoverForHire
             var body=Box("Coastal building",p+Vector3.up*h*.5f,new Vector3(w,h,d),wall);body.transform.rotation=Quaternion.Euler(0,yaw,0);
             Quaternion q=Quaternion.Euler(0,yaw,0);System.Action<Vector3,Vector3,Material> part=(v,s,m)=>b.Box(p+q*v,s,m,yaw);
             part(new Vector3(0,.35f,0),new Vector3(w+.2f,.7f,d+.2f),joint);part(new Vector3(0,h-.32f,0),new Vector3(w+.5f,.55f,d+.5f),trim);
+            System.Action<Vector3,Vector3> solid=(v,size)=>b.SolidBox(p+q*v,size,yaw);
             if(pitched)
             {
-                b.Gable(p+Vector3.up*h,new Vector3(w+1.4f,3.4f,d+1.4f),roof,yaw);
+                b.Gable(p+Vector3.up*h,new Vector3(w+1.4f,3.4f,d+1.4f),roof,yaw);b.SolidGable(p+Vector3.up*h,new Vector3(w+1.4f,3.4f,d+1.4f),yaw);
                 for(int i=0;i<Mathf.CeilToInt(d/1.6f);i++)
                 {
                     float z=-d*.5f+i*1.6f;b.Beam(p+q*new Vector3(-w*.5f,h+.06f,z),p+q*new Vector3(0,h+3.43f,z),.045f,joint);
@@ -191,6 +204,8 @@ namespace HoverForHire
                     part(new Vector3(0,h+.45f,s*d*.5f),new Vector3(w+.45f,.8f,.4f),wall);part(new Vector3(s*w*.5f,h+.45f,0),new Vector3(.4f,.8f,d+.45f),wall);
                 }
                 part(new Vector3(-w*.24f,h+.75f,-d*.2f),new Vector3(3,1.5f,2.6f),steel);part(new Vector3(w*.19f,h+.5f,-d*.17f),new Vector3(2.8f,.95f,2.2f),trim);
+                solid(new Vector3(-w*.24f,h+.75f,-d*.2f),new Vector3(3,1.5f,2.6f));solid(new Vector3(w*.19f,h+.5f,-d*.17f),new Vector3(2.8f,.95f,2.2f));
+                foreach(float s in new[]{-1f,1f}){solid(new Vector3(0,h+.45f,s*d*.5f),new Vector3(w+.45f,.8f,.4f));solid(new Vector3(s*w*.5f,h+.45f,0),new Vector3(.4f,.8f,d+.45f));}
                 for(int j=0;j<5;j++)part(new Vector3(-w*.24f-.95f+j*.47f,h+1.52f,-d*.2f),new Vector3(.2f,.04f,1.9f),tire);
             }
             int floors=Mathf.Max(1,Mathf.FloorToInt((h-1)/3.3f)),columns=Mathf.Max(2,Mathf.FloorToInt((w-3)/4.4f)),sideColumns=Mathf.Max(2,Mathf.FloorToInt((d-3)/4.4f));
@@ -246,6 +261,7 @@ namespace HoverForHire
         static void Freight()
         {
             var b=new EnvironmentGeometry("Freight yard / container logistics",root);b.Box(new Vector3(440,7.88f,-447),new Vector3(208,1f,133),joint);
+            b.SolidBox(new Vector3(440,7.88f,-447),new Vector3(208,1f,133));
             for(int i=0;i<8;i++)b.Box(new Vector3(354+i*25,8.4f,-447),new Vector3(.15f,.02f,125),paint);
             for(int row=0;row<4;row++)for(int col=0;col<7;col++)
             {
@@ -256,7 +272,7 @@ namespace HoverForHire
             for(int i=0;i<4;i++)
             {
                 b.Box(new Vector3(524.9f,11.8f,-497+i*20),new Vector3(.3f,6.8f,10),tire);b.Box(new Vector3(524.7f,11.5f,-497+i*20),new Vector3(.1f,6,8.5f),steel);
-                b.Box(new Vector3(520.8f,8.7f,-497+i*20),new Vector3(8,1,12),concrete);
+                b.Box(new Vector3(520.8f,8.7f,-497+i*20),new Vector3(8,1,12),concrete);b.SolidBox(new Vector3(520.8f,8.7f,-497+i*20),new Vector3(8,1,12));
             }
             Crane(b,new Vector3(394,8.4f,-417),30,37,90);Vehicle(b,new Vector3(518,8.42f,-418),trim,0,true);Vehicle(b,new Vector3(493,8.42f,-504),yellow,90,true);
             Fence(b,new Vector3(335,8.4f,-512),new Vector3(580,8.4f,-512),2.3f);Fence(b,new Vector3(335,8.4f,-512),new Vector3(335,8.4f,-397),2.3f);
@@ -264,7 +280,7 @@ namespace HoverForHire
         }
         static void Container(EnvironmentGeometry b,Vector3 p,Material color,float length)
         {
-            b.Box(p+Vector3.up*1.45f,new Vector3(length,2.9f,2.45f),color);
+            b.Box(p+Vector3.up*1.45f,new Vector3(length,2.9f,2.45f),color);b.SolidBox(p+Vector3.up*1.45f,new Vector3(length+.1f,2.9f,2.6f));
             for(int i=0;i<Mathf.FloorToInt(length/.42f);i++)foreach(float s in new[]{-1f,1f})
                 b.Box(p+new Vector3(-length*.5f+.22f+i*.42f,1.46f,s*1.26f),new Vector3(.08f,2.64f,.11f),color);
             foreach(float s in new[]{-1f,1f})
@@ -278,6 +294,12 @@ namespace HoverForHire
         static void Crane(EnvironmentGeometry b,Vector3 p,float height,float reach,float yaw)
         {
             Quaternion q=Quaternion.Euler(0,yaw,0);System.Func<Vector3,Vector3> at=v=>p+q*v;b.Box(p+Vector3.up*.7f,new Vector3(9,1.4f,9),concrete);
+            // Coarse solid envelope of the lattice tower, jib, cab, counterweight and hook line.
+            b.SolidBox(at(new Vector3(0,(height+1)*.5f,0)),new Vector3(4.1f,height+1,4.1f),yaw);
+            b.SolidBeam(at(new Vector3(-9,height+2.3f,0)),at(new Vector3(reach,height+2.3f,0)),1.1f,3.2f);
+            b.SolidBox(at(new Vector3(0,height+1.3f,0)),new Vector3(5,2.6f,5),yaw);b.SolidBox(at(new Vector3(-8,height+1,0)),new Vector3(5,3.5f,4),yaw);
+            b.SolidBox(at(new Vector3(-2,height+.8f,3.1f)),new Vector3(2.4f,2.6f,2.5f),yaw);
+            b.SolidBeam(at(new Vector3(reach-4,height+2,0)),at(new Vector3(reach-4,6,0)),.12f,.12f);b.SolidBox(at(new Vector3(reach-4,6,0)),new Vector3(2,.7f,1.5f),yaw);
             for(int i=0;i<4;i++)b.Beam(at(new Vector3(i%2==0?-1.8f:1.8f,1,i<2?-1.8f:1.8f)),at(new Vector3(i%2==0?-1.8f:1.8f,height,i<2?-1.8f:1.8f)),.48f,yellow);
             for(int h=1;h<height;h+=4)for(int side=0;side<4;side++)
             {
@@ -293,9 +315,10 @@ namespace HoverForHire
         static void Landmarks()
         {
             var b=new EnvironmentGeometry("Island destinations / distinct landmarks",root);Vector3 clinic=pads[4];
+            float clinicGround=Height(clinic.x,clinic.z);
             for(int floor=0;floor<10;floor++)foreach(float side in new[]{-1f,1f})
             {
-                float y=6+floor*3.5f;b.Box(new Vector3(clinic.x,y,clinic.z+side*17.1f),new Vector3(30,1.8f,.15f),glazing);
+                float y=6+floor*3.5f;if(y<clinicGround+1.5f)continue; // No glazing below the surrounding ground.b.Box(new Vector3(clinic.x,y,clinic.z+side*17.1f),new Vector3(30,1.8f,.15f),glazing);
                 b.Box(new Vector3(clinic.x+side*17.1f,y,clinic.z),new Vector3(.15f,1.8f,30),glazing);
                 for(int j=0;j<8;j++)
                 {
@@ -310,7 +333,8 @@ namespace HoverForHire
             b.Box(new Vector3(clinic.x,39.2f,clinic.z+17.3f),new Vector3(26,2.8f,.25f),teal);
             Sign("MERIDIAN MEDICAL",new Vector3(clinic.x,39.2f,clinic.z+17.5f),0,.8f,trim);
             b.Box(new Vector3(clinic.x+12,43.3f,clinic.z-12),new Vector3(5,1.5f,5),steel);b.Box(new Vector3(clinic.x-12,43.3f,clinic.z-12),new Vector3(3,1.5f,4),steel);
-            Vector3 farm=new Vector3(156,Height(156,256),256);Building(b,farm,25,18,6.5f,trim,Roof,0,true);
+            b.SolidBox(new Vector3(clinic.x+12,43.3f,clinic.z-12),new Vector3(5,1.5f,5));b.SolidBox(new Vector3(clinic.x-12,43.3f,clinic.z-12),new Vector3(3,1.5f,4));
+            Vector3 farm=Settle(new Vector3(156,0,256),25,18,8);Building(b,farm,25,18,6.5f,trim,Roof,0,true);
             Fence(b,new Vector3(139,Height(139,231),231),new Vector3(139,Height(139,325),325),1.15f);
             for(int x=0;x<7;x++)for(int z=0;z<6;z++)
             {
@@ -318,29 +342,32 @@ namespace HoverForHire
                 Tree(b,p,5.3f+(x+z)%3*.6f,x+z,false);
                 for(int fruit=0;fruit<3;fruit++)b.Rock(p+new Vector3(-1+fruit,3.5f,.9f),new Vector3(.18f,.18f,.18f),Signal,fruit*31);
             }
-            Vector3 ridge=new Vector3(521,Height(521,529),529);Building(b,ridge,20,13,6,trim,blue,0,true);
-            RadioMast(b,new Vector3(536,Height(536,546),546),25);b.Cylinder(ridge+new Vector3(-15,1.4f,3),2.1f,2.8f,steel);
-            Vector3 lodge=new Vector3(-395,Height(-395,446),446);Building(b,lodge,37,27,11,Wood,Roof,0,true);
-            b.Box(lodge+new Vector3(0,4.4f,16),new Vector3(41,.35f,6),Wood);Fence(b,lodge+new Vector3(-20,4.7f,18),lodge+new Vector3(20,4.7f,18),1.15f);
+            // Buildings beside the cut ridge and summit pads take the flattest nearby footing instead of floating.
+            Vector3 ridge=Settle(new Vector3(521,0,529),20,13,18);Building(b,ridge,20,13,6,trim,blue,0,true);
+            RadioMast(b,new Vector3(ridge.x+15,Height(ridge.x+15,ridge.z+17),ridge.z+17),25);
+            Vector3 tank=ridge+new Vector3(-15,0,3);tank.y=Height(tank.x,tank.z);b.Cylinder(tank+Vector3.up*1.4f,2.1f,2.8f,steel);b.SolidCylinder(tank+Vector3.up*1.4f,2.1f,2.8f);
+            Vector3 lodge=Settle(new Vector3(-395,0,446),37,27,20);Building(b,lodge,37,27,11,Wood,Roof,0,true);
+            b.Box(lodge+new Vector3(0,4.4f,16),new Vector3(41,.35f,6),Wood);b.SolidBox(lodge+new Vector3(0,4.4f,16),new Vector3(41,.35f,6));Fence(b,lodge+new Vector3(-20,4.7f,18),lodge+new Vector3(20,4.7f,18),1.15f);
             for(int i=0;i<6;i++)b.Cylinder(lodge+new Vector3(-18+i*7.2f,2.2f,18),.15f,4.4f,Wood);
-            b.Box(lodge+new Vector3(11,13,0),new Vector3(2,7,3),rock);Sign("SUMMIT LODGE",lodge+new Vector3(0,8.7f,13.7f),0,.75f,trim);
+            b.Box(lodge+new Vector3(11,13,0),new Vector3(2,7,3),rock);b.SolidBox(lodge+new Vector3(11,13,0),new Vector3(2,7,3));Sign("SUMMIT LODGE",lodge+new Vector3(0,8.7f,13.7f),0,.75f,trim);
             Vector3 light=new Vector3(-752,Height(-752,450),450);
             IslandWorld.Piece("Lighthouse tower",PrimitiveType.Cylinder,light+Vector3.up*15,new Vector3(8,15,8),trim);
             for(int i=0;i<3;i++)b.Cylinder(light+Vector3.up*(8+i*8),4.06f,2.6f,coral);
             b.Cylinder(light+Vector3.up*30.2f,5.2f,.55f,concrete);b.Cylinder(light+Vector3.up*32.5f,3.3f,4,glazing);
             b.Cone(light+Vector3.up*35.7f,new Vector3(4.1f,2.6f,4.1f),teal);
+            b.SolidCylinder(light+Vector3.up*31.2f,5.3f,2.6f);b.SolidCylinder(light+Vector3.up*32.5f,3.4f,4.2f);b.SolidCone(light+Vector3.up*34.4f,4.1f,2.7f);
             for(int i=0;i<12;i++)
             {
                 float a=i*30*Mathf.Deg2Rad;Vector3 offset=new Vector3(Mathf.Sin(a),0,Mathf.Cos(a)),next=new Vector3(Mathf.Sin(a+30*Mathf.Deg2Rad),0,Mathf.Cos(a+30*Mathf.Deg2Rad));
                 b.Cylinder(light+offset*3.32f+Vector3.up*32.5f,.085f,4,trim);b.Cylinder(light+offset*4.85f+Vector3.up*31,.06f,1.5f,steel);
                 b.Beam(light+offset*4.85f+Vector3.up*31.7f,light+next*4.85f+Vector3.up*31.7f,.065f,steel);
             }
-            b.Cylinder(light+Vector3.up*32.5f,.75f,1.5f,yellow);Building(b,light+new Vector3(-22,0,-9),19,12,5,trim,Roof,0,true);
+            b.Cylinder(light+Vector3.up*32.5f,.75f,1.5f,yellow);Building(b,Settle(light+new Vector3(-22,0,-9),19,12,10),19,12,5,trim,Roof,0,true);
             for(int i=0;i<4;i++)
             {
-                Vector3 p=new Vector3(806+i%2*28,0,31+i/2*34);p.y=Height(p.x,p.z);Building(b,p,17,13,5.5f,i%2==0?ochre:coral,blue,0,true);
+                Vector3 p=Settle(new Vector3(806+i%2*28,0,31+i/2*34),17,13,5);Building(b,p,17,13,5.5f,i%2==0?ochre:coral,blue,0,true);
             }
-            Vector3 jetty=new Vector3(991,1.2f,79);b.Box(jetty,new Vector3(130,.6f,6),Wood);
+            Vector3 jetty=new Vector3(991,1.2f,79);b.Box(jetty,new Vector3(130,.6f,6),Wood);b.SolidBox(jetty,new Vector3(130,.6f,6));
             for(int i=0;i<31;i++)
             {
                 b.Box(jetty+new Vector3(-63+i*4.2f,.33f,0),new Vector3(.08f,.03f,6),tire);
@@ -350,7 +377,7 @@ namespace HoverForHire
             var detail=new EnvironmentGeometry("Landing pads / inset edge lights",root);
             for(int i=0;i<pads.Length;i++)for(int n=0;n<8;n++)
             {
-                float radius=i==0?17:i==4?9:i>5?10:14,a=n*45*Mathf.Deg2Rad;Vector3 p=pads[i]+new Vector3(Mathf.Sin(a)*(radius+1.1f),.02f,Mathf.Cos(a)*(radius+1.1f));
+                float radius=IslandWorld.PadRadius(i),a=n*45*Mathf.Deg2Rad;Vector3 p=pads[i]+new Vector3(Mathf.Sin(a)*(radius+1.1f),.02f,Mathf.Cos(a)*(radius+1.1f));
                 detail.Cylinder(p,.2f,.075f,Metal);detail.Cylinder(p+Vector3.up*.05f,.11f,.065f,yellow);
             }
             detail.Finish();
@@ -369,6 +396,8 @@ namespace HoverForHire
             b.Beam(at(new Vector3(0,3.1f,-length*.15f)),at(new Vector3(0,6.2f,-length*.15f)),.09f,steel);
             b.Beam(at(new Vector3(-1,5.2f,-length*.15f)),at(new Vector3(1,5.2f,-length*.15f)),.065f,trim);
             b.Beam(a+Vector3.up*.45f,c+Vector3.up*.45f,.075f,trim);b.Beam(a+Vector3.up*.45f,f+Vector3.up*.45f,.075f,trim);b.Beam(c+Vector3.up*.45f,d+Vector3.up*.45f,.075f,trim);
+            b.SolidBox(at(new Vector3(0,.4f-h*.5f,0)),new Vector3(w,h+.8f,length*.95f),yaw);b.SolidBox(at(new Vector3(0,1.9f,-length*.1f)),new Vector3(w*.8f,2.6f,length*.3f),yaw);
+            b.SolidBeam(at(new Vector3(0,3.1f,-length*.15f)),at(new Vector3(0,6.2f,-length*.15f)),.15f,.15f);
         }
         static void Vegetation()
         {
@@ -385,6 +414,7 @@ namespace HoverForHire
                     if(y<4.7f || slope>.45f)
                     {
                         float size=1.5f+Next(random)*4;b.Rock(p+Vector3.up*.15f,new Vector3(size,size*.65f,size*.8f),rock,Next(random)*360);
+                        b.SolidBicone(p+Vector3.up*(.15f+size*.1f),size*.8f,size*.3f,VegetationLayer);
                         if(y>1 && i%2==0)Shrub(b,p+new Vector3(3,0,1),1.5f,random);
                     }
                     else
@@ -422,7 +452,12 @@ namespace HoverForHire
         }
         static void Tree(EnvironmentGeometry b,Vector3 p,float h,int seed,bool evergreen)
         {
+            if(InsidePadClearance(p,h*.3f))return;
             float yaw=seed*137.51f,r=h*(evergreen?.19f:.25f);b.Cylinder(p+Vector3.up*h*.36f,h*.019f,h*.72f,bark);
+            // Collision on the vegetation layer: rotors strike it, the chase camera passes through it.
+            b.SolidCylinder(p+Vector3.up*h*.36f,Mathf.Max(.15f,h*.022f),h*.72f,VegetationLayer);
+            if(evergreen){b.SolidCylinder(p+Vector3.up*h*.32f,r,h*.28f,VegetationLayer);b.SolidCone(p+Vector3.up*h*.46f,r,h*.54f,VegetationLayer);}
+            else b.SolidCylinder(p+Vector3.up*h*.72f,r*1.45f,h*.46f,VegetationLayer);
             if(evergreen)
             {
                 b.Evergreen(p+Vector3.up*h*.59f,new Vector3(r*1.22f,h*.82f,r*1.22f),pine,yaw);
@@ -451,7 +486,9 @@ namespace HoverForHire
         }
         static void Vehicle(EnvironmentGeometry b,Vector3 p,Material body,float yaw,bool utility)
         {
+            if(InsidePadClearance(p,3))return;
             Quaternion q=Quaternion.Euler(0,yaw,0);System.Action<Vector3,Vector3,Material> part=(v,s,m)=>b.Box(p+q*v,s,m,yaw);float length=utility?5.3f:4.5f;
+            b.SolidBox(p+q*new Vector3(0,.9f,0),new Vector3(1.95f,1.8f,length+.1f),yaw);
             part(new Vector3(0,.75f,0),new Vector3(1.9f,.7f,length),body);part(new Vector3(0,1.38f,utility?.5f:0),new Vector3(1.73f,.75f,utility?2.2f:2.8f),body);
             part(new Vector3(0,1.44f,utility?1.62f:1.44f),new Vector3(1.52f,.55f,.055f),glazing);
             foreach(float side in new[]{-1f,1f})
@@ -465,7 +502,9 @@ namespace HoverForHire
         }
         static void StreetLight(EnvironmentGeometry b,Vector3 p,float yaw)
         {
+            if(InsidePadClearance(p,2.5f))return;
             Quaternion q=Quaternion.Euler(0,yaw,0);b.Cylinder(p+Vector3.up*4.4f,.1f,8.8f,steel);b.Beam(p+Vector3.up*8.7f,p+q*new Vector3(0,8.85f,2.2f),.1f,steel);
+            b.SolidCylinder(p+Vector3.up*4.4f,.12f,8.8f);b.SolidBeam(p+Vector3.up*8.7f,p+q*new Vector3(0,8.85f,2.4f),.3f,.3f);
             b.Box(p+q*new Vector3(0,8.8f,2.3f),new Vector3(.4f,.18f,.9f),Metal,yaw);b.Box(p+q*new Vector3(0,8.69f,2.3f),new Vector3(.30f,.025f,.7f),trim,yaw);
         }
         static void Bench(EnvironmentGeometry b,Vector3 p,float yaw)
@@ -477,7 +516,7 @@ namespace HoverForHire
         { b.Cylinder(p+Vector3.up*.48f,.15f,.96f,yellow);b.Cylinder(p+Vector3.up*.68f,.153f,.22f,Metal); }
         static void Crate(EnvironmentGeometry b,Vector3 p)
         {
-            b.Box(p+Vector3.up*.9f,new Vector3(3.4f,1.8f,3),Wood);
+            b.Box(p+Vector3.up*.9f,new Vector3(3.4f,1.8f,3),Wood);b.SolidBox(p+Vector3.up*.9f,new Vector3(3.4f,1.8f,3));
             for(int j=0;j<3;j++)b.Box(p+new Vector3(-1.3f+j*1.3f,1,1.55f),new Vector3(.11f,1.7f,.09f),ochre);
         }
         static void Fence(EnvironmentGeometry b,Vector3 a,Vector3 c,float height)
@@ -487,10 +526,11 @@ namespace HoverForHire
         }
         static void RadioMast(EnvironmentGeometry b,Vector3 p,float height)
         {
-            b.Cylinder(p+Vector3.up*height*.5f,.17f,height,steel);
+            b.Cylinder(p+Vector3.up*height*.5f,.17f,height,steel);b.SolidCylinder(p+Vector3.up*height*.5f,.2f,height);
             for(int i=0;i<3;i++)
             {
                 float a=i*120*Mathf.Deg2Rad;b.Beam(p+new Vector3(Mathf.Sin(a)*7,0,Mathf.Cos(a)*7),p+Vector3.up*height*.7f,.045f,steel);
+                b.SolidBeam(p+new Vector3(Mathf.Sin(a)*7,0,Mathf.Cos(a)*7),p+Vector3.up*height*.7f,.1f,.1f); // Guy wires strike rotors too.
                 b.Box(p+new Vector3(Mathf.Sin(a)*1.4f,height-3,Mathf.Cos(a)*1.4f),new Vector3(.5f,3,.6f),trim,i*120);
             }
             b.Cylinder(p+Vector3.up*height,.2f,.5f,Signal);
@@ -513,6 +553,31 @@ namespace HoverForHire
         static float Next(System.Random random)=>(float)random.NextDouble();
         static bool NearPad(Vector3 p,float distance)
         { foreach(var pad in pads)if(Vector2.Distance(new Vector2(pad.x,pad.z),new Vector2(p.x,p.z))<distance)return true;return false; }
+        /// <summary>True inside the obstacle-free ring around any pad (rotor reach from the pad edge plus margin).</summary>
+        static bool InsidePadClearance(Vector3 p,float extent=0)
+        {
+            for(int i=0;i<pads.Length;i++)
+                if(Vector2.Distance(new Vector2(pads[i].x,pads[i].z),new Vector2(p.x,p.z))<IslandWorld.PadObstacleClearance(i)+extent)return true;
+            return false;
+        }
+        /// <summary>
+        /// Flattest footing within searchRadius of the preferred point, outside pad clearance. The base sits at the
+        /// lowest footprint sample so the building never floats; the uphill side is set into the slope.
+        /// </summary>
+        static Vector3 Settle(Vector3 preferred,float width,float depth,float searchRadius)
+        {
+            Vector3 best=new Vector3(preferred.x,Height(preferred.x,preferred.z),preferred.z);float bestScore=float.MaxValue;
+            for(float dx=-searchRadius;dx<=searchRadius;dx+=2.5f)for(float dz=-searchRadius;dz<=searchRadius;dz+=2.5f)
+            {
+                float x=preferred.x+dx,z=preferred.z+dz;
+                if(InsidePadClearance(new Vector3(x,0,z),Mathf.Max(width,depth)*.5f))continue;
+                float low=float.MaxValue,high=float.MinValue;
+                for(int i=0;i<9;i++){float y=Height(x+(i%3-1)*width*.5f,z+(i/3-1)*depth*.5f);low=Mathf.Min(low,y);high=Mathf.Max(high,y);}
+                float score=(high-low)+Mathf.Sqrt(dx*dx+dz*dz)*.03f;
+                if(score<bestScore){bestScore=score;best=new Vector3(x,low,z);}
+            }
+            return best;
+        }
         static bool NearRoad(Vector3 p,float distance)
         {
             Vector2 point=new Vector2(p.x,p.z);foreach(var path in roads)for(int i=0;i<path.Length-1;i++)

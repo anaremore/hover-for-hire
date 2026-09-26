@@ -162,13 +162,19 @@ namespace HoverForHire.Tests
         public void ReleasingCyclicRetainsHorizontalMomentum()
         {
             HelicopterController controller = Create();
-            PrimeAtHover(controller);
-            controller.Body.linearVelocity = Vector3.forward * 12f;
-            Step(1);
-            Assert.That(controller.GroundSpeed, Is.GreaterThan(11.9f));
-            Step(24);
-            Assert.That(controller.GroundSpeed, Is.GreaterThan(10.5f));
-            Assert.That(controller.Body.position.z, Is.GreaterThan(10005f));
+            PrimeAtHover(controller, 80f);
+            PilotCommand hover = Input(controller).Value;
+            // Tilt forward to build speed, then release cyclic: Beginner levels the aircraft, and the speed carries on.
+            Input(controller).Value = new PilotCommand(new Vector2(0f, 0.5f), 0f, hover.Collective);
+            Step(60);
+            Input(controller).Value = hover;
+            Step(50);
+            float released = controller.GroundSpeed;
+            Assert.That(released, Is.GreaterThan(3f), "Forward cyclic should have built real speed.");
+            Step(100);
+            Assert.That(Vector3.Angle(controller.transform.up, Vector3.up), Is.LessThan(5f), "Auto-level returns the aircraft to level.");
+            Assert.That(controller.GroundSpeed, Is.GreaterThan(released * 0.8f), "Level flight keeps its momentum; stopping needs aft cyclic.");
+            Assert.That(controller.Body.linearVelocity.z, Is.GreaterThan(0f));
         }
 
         [Test]

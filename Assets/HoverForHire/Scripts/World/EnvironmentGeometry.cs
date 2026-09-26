@@ -6,6 +6,7 @@ namespace HoverForHire
 {
     // Static scenery is merged by material and district, keeping hundreds of small details
     // out of the hierarchy and allowing normal frustum / shadow culling per district.
+    // Collision uses separate low-poly shapes merged per layer into one static mesh collider per batch.
     internal sealed class EnvironmentGeometry
     {
         sealed class Surface
@@ -16,11 +17,63 @@ namespace HoverForHire
             public readonly List<int> Triangles = new List<int>();
         }
 
+        sealed class CollisionSurface
+        {
+            public readonly List<Vector3> Vertices = new List<Vector3>();
+            public readonly List<int> Triangles = new List<int>();
+        }
+
+        // Template mesh data is read once; Mesh.vertices and friends allocate a new copy on every access.
+        sealed class Template
+        {
+            public Vector3[] Vertices, Normals;
+            public Vector2[] UV;
+            public int[] Triangles;
+        }
+
         readonly Dictionary<Material, Surface> surfaces = new Dictionary<Material, Surface>();
+        readonly Dictionary<int, CollisionSurface> collision = new Dictionary<int, CollisionSurface>();
+        static readonly Dictionary<Mesh, Template> templates = new Dictionary<Mesh, Template>();
         readonly string name;
         readonly Transform parent;
-        static Mesh cube, cylinder, cone, roof, rock, foliage, evergreen;
+        static Mesh cube, cylinder, cone, roof, rock, foliage, evergreen, solidPrism, solidCone, solidBicone;
         public EnvironmentGeometry(string name, Transform parent) { this.name = name; this.parent = parent; }
+
+        static Template Read(Mesh mesh)
+        {
+            if (!templates.TryGetValue(mesh, out var data))
+                templates.Add(mesh, data = new Template { Vertices = mesh.vertices, Normals = mesh.normals, UV = mesh.uv, Triangles = mesh.triangles });
+            return data;
+        }
+
+        // ---- Collision (low-poly, merged per layer; never rendered) ----
+        public void SolidBox(Vector3 position, Vector3 size, float yaw = 0, int layer = 0)
+        { AddCollision(Cube, position, size, Quaternion.Euler(0, yaw, 0), layer); }
+        public void SolidBox(Vector3 position, Vector3 size, Quaternion rotation, int layer = 0)
+        { AddCollision(Cube, position, size, rotation, layer); }
+        public void SolidBeam(Vector3 a, Vector3 b, float width, float depth, int layer = 0)
+        { AddCollision(Cube, (a + b) * .5f, new Vector3(width, depth, Vector3.Distance(a, b)), Quaternion.LookRotation(b - a), layer); }
+        /// <summary>Octagonal prism centered on position; radius and height in metres.</summary>
+        public void SolidCylinder(Vector3 center, float radius, float height, int layer = 0)
+        { AddCollision(SolidPrismMesh, center, new Vector3(radius, height, radius), Quaternion.identity, layer); }
+        /// <summary>Octagonal cone standing on baseCenter.</summary>
+        public void SolidCone(Vector3 baseCenter, float radius, float height, int layer = 0)
+        { AddCollision(SolidConeMesh, baseCenter, new Vector3(radius, height, radius), Quaternion.identity, layer); }
+        /// <summary>Octagonal double cone (a coarse ellipsoid) centered on center.</summary>
+        public void SolidBicone(Vector3 center, float radius, float halfHeight, int layer = 0)
+        { AddCollision(SolidBiconeMesh, center, new Vector3(radius, halfHeight, radius), Quaternion.identity, layer); }
+        public void SolidGable(Vector3 position, Vector3 size, float yaw = 0, int layer = 0)
+        { AddCollision(Roof, position, size, Quaternion.Euler(0, yaw, 0), layer); }
+
+        void AddCollision(Mesh mesh, Vector3 position, Vector3 size, Quaternion rotation, int layer)
+        {
+            if (!collision.TryGetValue(layer, out var data)) collision.Add(layer, data = new CollisionSurface());
+            Matrix4x4 transform = Matrix4x4.TRS(position, rotation, size);
+            Template template = Read(mesh);
+            int start = data.Vertices.Count;
+            foreach (Vector3 vertex in template.Vertices) data.Vertices.Add(transform.MultiplyPoint3x4(vertex));
+            foreach (int index in template.Triangles) data.Triangles.Add(start + index);
+        }
 
         public void Box(Vector3 position, Vector3 size, Material material, float yaw = 0)
         { Add(Cube, position, size, Quaternion.Euler(0, yaw, 0), material); }
@@ -44,7 +97,8 @@ namespace HoverForHire
             if (!surfaces.TryGetValue(material, out var data)) surfaces.Add(material, data = new Surface());
             Matrix4x4 transform = Matrix4x4.TRS(position, rotation, size);
             Matrix4x4 normalTransform = transform.inverse.transpose;
-            var vertices = mesh.vertices; var normals = mesh.normals; var uv = mesh.uv; var triangles = mesh.triangles;
+            Template template = Read(mesh);
+            var vertices = template.Vertices; var normals = template.Normals; var uv = template.UV; var triangles = template.Triangles;
             int start = data.Vertices.Count;
             for (int i = 0; i < vertices.Length; i++)
             {
@@ -82,6 +136,22 @@ namespace HoverForHire
                 renderer.shadowCastingMode = shadows ? ShadowCastingMode.On : ShadowCastingMode.Off;
                 lifetime.Meshes.Add(mesh);
             }
+            foreach (var entry in collision)
+            {
+                var data = entry.Value;
+                if (data.Vertices.Count == 0) continue;
+                var mesh = new Mesh { name = name + " / collision", indexFormat = data.Vertices.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
+                mesh.SetVertices(data.Vertices); mesh.SetTriangles(data.Triangles, 0); mesh.RecalculateBounds();
+                var go = new GameObject("Collision / layer " + entry.Key) { layer = entry.Key };
+                go.transform.SetParent(group, false);
+                go.AddComponent<MeshCollider>().sharedMesh = mesh;
+                lifetime.Meshes.Add(mesh);
+            }
+        }
+
+        public int CollisionTriangleCount
+        {
+            get { int count = 0; foreach (var entry in collision) count += entry.Value.Triangles.Count / 3; return count; }
         }
 
         static Mesh Cube
@@ -189,6 +259,31 @@ namespace HoverForHire
                 evergreen=Make("Organic coastal evergreen crown",vertices,uv,triangles);return evergreen;
             }
         }
+        // Collision templates: eight sides is enough for strike and contact checks.
+        static Mesh SolidPrismMesh { get { if (solidPrism == null) solidPrism = Solid(false, false); return solidPrism; } }
+        static Mesh SolidConeMesh { get { if (solidCone == null) solidCone = Solid(true, false); return solidCone; } }
+        static Mesh SolidBiconeMesh { get { if (solidBicone == null) solidBicone = Solid(true, true); return solidBicone; } }
+        /// <summary>Prism: unit radius, height 1 centered. Cone: base at y 0, apex at y 1. Bicone: apexes at ±1.</summary>
+        static Mesh Solid(bool pointed, bool doubled)
+        {
+            const int sides = 8; var v = new List<Vector3>(); var t = new List<int>();
+            float bottom = pointed ? 0 : -.5f, top = pointed ? 1 : .5f;
+            for (int i = 0; i < sides; i++) { float a = i * Mathf.PI * 2 / sides; v.Add(new Vector3(Mathf.Sin(a), bottom, Mathf.Cos(a))); }
+            if (!pointed) for (int i = 0; i < sides; i++) { float a = i * Mathf.PI * 2 / sides; v.Add(new Vector3(Mathf.Sin(a), top, Mathf.Cos(a))); }
+            int apex = v.Count; v.Add(new Vector3(0, top, 0));
+            int foot = v.Count; v.Add(new Vector3(0, doubled ? -1 : bottom, 0));
+            for (int i = 0; i < sides; i++)
+            {
+                int next = (i + 1) % sides;
+                // Outward windings, matching the render meshes (raycasts only hit front faces).
+                if (pointed) t.AddRange(new[] { i, next, apex });
+                else t.AddRange(new[] { i, next, sides + next, i, sides + next, sides + i, apex, sides + i, sides + next });
+                t.AddRange(new[] { i, foot, next });
+            }
+            var mesh = new Mesh { name = pointed ? (doubled ? "Collision bicone" : "Collision cone") : "Collision prism" };
+            mesh.SetVertices(v); mesh.SetTriangles(t, 0); mesh.RecalculateBounds(); return mesh;
+        }
+
         static void Face(List<Vector3> v,List<Vector2> uv,List<int> triangles,Vector3 a,Vector3 b,Vector3 c,Vector3 d)
         {
             int k=v.Count;v.AddRange(new[]{a,b,c,d});uv.AddRange(new[]{new Vector2(0,0),new Vector2(1,0),new Vector2(1,1),new Vector2(0,1)});

@@ -81,11 +81,59 @@ namespace HoverForHire.Tests
         }
 
         [Test]
-        public void ActualAircraftSettlesUprightAtEveryProductionLandingLocation()
+        public void NavigationChartDrawsEveryBuiltRoad()
+        {
+            Assert.That(IslandWorld.Roads.Count, Is.EqualTo(20), "The chart must come from the same road list as the scenery.");
+            foreach (Vector2[] road in IslandWorld.Roads) Assert.That(road.Length, Is.GreaterThanOrEqualTo(2));
+        }
+
+        [Test]
+        public void ApproachColumnAboveEveryPadIsClear()
+        {
+            var overlaps = new Collider[16];
+            for (int i = 0; i < zones.Length; i++)
+            {
+                Vector3 pad = zones[i].transform.position;
+                float radius = IslandWorld.PadRadius(i);
+                int count = Physics.OverlapCapsuleNonAlloc(pad + Vector3.up * (6f + radius), pad + Vector3.up * 80f, radius,
+                    overlaps, ~(1 << WorldConstants.AircraftLayer), QueryTriggerInteraction.Ignore);
+                var names = new List<string>();
+                for (int c = 0; c < count; c++) names.Add(overlaps[c].name);
+                Assert.That(count, Is.Zero, zones[i].DisplayName + " vertical approach is obstructed by: " + string.Join(", ", names));
+            }
+        }
+
+        [Test]
+        public void RotorClearsObstaclesWhenLandedAnywhereOnEveryPad()
+        {
+            HelicopterController controller = ProductionAircraft();
+            for (int i = 0; i < zones.Length; i++)
+            {
+                LandingZone zone = zones[i];
+                for (int direction = 0; direction < 8; direction++)
+                {
+                    // Near the pad edge the landed rotor disc reaches furthest beyond the pad.
+                    Quaternion heading = Quaternion.Euler(0f, direction * 45f, 0f);
+                    Vector3 spot = zone.transform.position + heading * Vector3.forward * (zone.Radius - 1.2f);
+                    controller.ResetAt(spot + Vector3.up * 1.55f, heading);
+                    Physics.SyncTransforms();
+                    for (int step = 0; step < 20; step++)
+                    {
+                        controller.SendMessage("FixedUpdate", SendMessageOptions.RequireReceiver);
+                        Physics.Simulate(Dt);
+                    }
+                    Assert.That(controller.Crashed, Is.False, $"{zone.DisplayName} edge {direction * 45}°: " +
+                        CrashReport.Detail(controller.LastCrashCause, controller.CrashValue, controller.CrashLimit, controller.CrashObstacle) +
+                        " (" + controller.CrashObstacle + ")");
+                }
+            }
+        }
+
+        private HelicopterController ProductionAircraft()
         {
             helicopter = new GameObject("Production geometry spawn test");
             helicopter.SetActive(false);
-            helicopter.layer = 8;
+            helicopter.layer = WorldConstants.AircraftLayer;
             helicopter.transform.position = zones[0].transform.position + Vector3.up * 1.55f;
             helicopter.AddComponent<Rigidbody>();
             var pilot = helicopter.AddComponent<RuntimePilotInput>();
@@ -93,10 +141,32 @@ namespace HoverForHire.Tests
             tuning = FlightTuning.CreateRuntimeDefaults();
             controller.Tuning = tuning;
             controller.InputSource = pilot;
+            controller.RotorClearanceMask = WorldConstants.RotorClearanceMask;
+            controller.WaterSurfaceHeight = WorldConstants.SeaLevel;
             helicopter.AddComponent<HelicopterVisual>().Build(controller);
             helicopter.SetActive(true);
             controller.Body.interpolation = RigidbodyInterpolation.None;
             controller.Body.sleepThreshold = 0f;
+            return controller;
+        }
+
+        [Test]
+        public void TreesAndPropsHaveCollisionAndTheApronIsSolid()
+        {
+            int vegetation = 0;
+            foreach (Collider collider in world.GetComponentsInChildren<Collider>())
+                if (collider.gameObject.layer == WorldConstants.VegetationLayer) vegetation++;
+            Assert.That(vegetation, Is.GreaterThan(50), "Every vegetation cell carries merged tree collision.");
+            // Open apron between the home pad and the rescue station, clear of buildings and vehicles.
+            Assert.That(Physics.Raycast(new Vector3(-440f, 60f, -470f), Vector3.down, out RaycastHit apron, 100f,
+                ~(1 << WorldConstants.AircraftLayer), QueryTriggerInteraction.Ignore), Is.True);
+            Assert.That(apron.point.y, Is.EqualTo(8.68f).Within(0.02f), "Skids rest on the visible apron, not the terrain below it.");
+        }
+
+        [Test]
+        public void ActualAircraftSettlesUprightAtEveryProductionLandingLocation()
+        {
+            HelicopterController controller = ProductionAircraft();
             int crashes = 0;
             controller.CrashedEvent += () => crashes++;
 

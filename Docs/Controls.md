@@ -1,6 +1,6 @@
 # Controls and camera
 
-All flight controls use Unity's Input System. Open the pause settings to change bindings and preferences. Keyboard composite directions, gamepad axes, individual buttons, mouse delta, and the initially unbound absolute collective are exposed separately. Press Escape or the gamepad menu Back binding to cancel an interactive rebind (Escape alone while changing MenuBack itself). Changes to a completed binding save immediately; save preferences after editing settings. Restoring defaults affects controls and camera preferences only, leaving progression intact.
+All flight controls use Unity's Input System. Open the pause settings to change bindings and preferences. On-screen key hints (including collective) are built from the current bindings and switch between keyboard and gamepad names according to the device used last. On first launch a welcome panel explains collective and offers the Takeoff drill; it appears once. Keyboard composite directions, gamepad axes, individual buttons, mouse delta, and the initially unbound absolute collective are exposed separately. Press Escape or the gamepad menu Back binding to cancel an interactive rebind (Escape alone while changing MenuBack itself). Changes to a completed binding save immediately; save preferences after editing settings. Restoring defaults affects controls and camera preferences only, leaving progression intact.
 
 Pause menus support the gamepad without a mouse: D-pad or left stick up/down moves the highlighted control; left/right changes a tab, option, or slider; South selects; East resumes. Holding a direction repeats after a short delay. Long lists scroll the focused control into view. MenuMove, MenuSubmit, and MenuBack are also rebindable.
 
@@ -15,8 +15,8 @@ Pause menus support the gamepad without a mouse: D-pad or left stick up/down mov
 | Center mouse cyclic | C | D-pad down |
 | Pause / settings | Escape | Start / Menu |
 | Reset at helipad | Backspace | Select / View |
-| Accept / interact | Enter | South face button (A / Cross) |
-| Cycle assist preset | F2 | D-pad up |
+| Accept / interact (Free Flight: start a shift) | Enter | South face button (A / Cross) |
+| Cycle assist preset (announced) | F2 | D-pad up |
 | Hover-hold status (deferred) | H | West face button (X / Square) |
 | Development overlay | F1 | D-pad right |
 | Record flight data (CSV) | F3 | — |

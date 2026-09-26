@@ -54,6 +54,17 @@ namespace HoverForHire
         [Tooltip("Vertical-fin yaw moment per (lateral airspeed × airspeed), N·m/(m/s)². Turns the nose into the relative wind.")]
         [Min(0f)] public float WeathervaneCoefficient = 3f;
 
+        [Header("Rotor geometry (aircraft axes: right, up, forward)")]
+        [Tooltip("Main rotor hub, matching the imported art.")]
+        public Vector3 MainRotorHub = new Vector3(0f, 2.055f, -0.07f);
+        [Min(0.5f)] public float MainRotorRadius = 4.62f;
+        public Vector3 TailRotorHub = new Vector3(0.3f, 0.9f, -5.09f);
+        [Min(0.1f)] public float TailRotorRadius = 0.87f;
+        [Tooltip("Thickness of the swept blade volume used for strike detection.")]
+        [Min(0.02f)] public float RotorDiscThickness = 0.3f;
+        [Tooltip("Below this fraction of governed speed the blades no longer count as a strike hazard.")]
+        [Range(0f, 1f)] public float RotorStrikeMinimumSpeed01 = 0.25f;
+
         [Header("Ground and damage")]
         [Min(0f)] public float SkidClearanceMeters = 1.5f;
         [Min(1f)] public float AltitudeRayLengthMeters = 3000f;

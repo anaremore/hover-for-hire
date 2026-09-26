@@ -12,7 +12,7 @@ namespace HoverForHire
     {
         public PilotCommand Command {get;private set;}
         GameBootstrap game; string output; bool artTour;
-        int errors,frameLimit=120,measuredFrames;float peakAltitude,peakSpeed,measurementStart;bool everCrashed,startedGrounded;
+        int errors,frameLimit=120,measuredFrames;float peakAltitude,peakSpeed,measurementStart;bool everCrashed,startedGrounded,scriptedSegment=true;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void EnableOnRequest()
         {
@@ -31,6 +31,9 @@ namespace HoverForHire
             yield return new WaitForSecondsRealtime(2);game=GameBootstrap.Instance;
             if(game==null){File.WriteAllText(Path.Combine(output,"smoke-failed.txt"),"No bootstrap");Application.Quit(1);yield break;}
             game.GetComponent<FlightHUD>().SendMessage("SetPause",false);
+            var welcome=game.GetComponent<FlightHUD>();welcome.PreviewFirstRun();
+            yield return new WaitForSeconds(.4f);yield return Capture("00-welcome.png");
+            welcome.DismissFirstRun(false);
             game.Input.enabled=false;game.Input.SetPaused(false);game.Aircraft.InputSource=this;
             yield return new WaitForSeconds(.8f);
             startedGrounded=game.Aircraft.Grounded;
@@ -49,15 +52,27 @@ namespace HoverForHire
             yield return Capture("03-forward.png");
             game.CameraRig.ToggleCamera();yield return new WaitForSeconds(1);yield return Capture("04-cockpit.png");
             game.CameraRig.ToggleCamera();
-            Command=PilotCommand.Neutral;game.Missions.Retry();yield return new WaitForSeconds(2);
+            // The scripted segment ends here; the altitude band applies to it. The autopilot then flies the
+            // aircraft back and lands it on the home pad through ordinary pilot commands (no teleport).
+            scriptedSegment=false;
+            var autopilot=gameObject.AddComponent<Autopilot>();autopilot.Aircraft=game.Aircraft;game.Aircraft.InputSource=autopilot;
+            Vector3 home=game.Zones[0].transform.position;autopilot.FlyTo(home);
+            float deadline=Time.time+120;
+            while(autopilot.Current!=Autopilot.Phase.Landed&&!game.Aircraft.Crashed&&Time.time<deadline)yield return null;
+            yield return new WaitForSeconds(.5f);yield return Capture("04b-landed.png");
+            bool landedHome=autopilot.Current==Autopilot.Phase.Landed&&!game.Aircraft.Crashed;
+            float landingOffset=Vector2.Distance(new Vector2(game.Aircraft.Body.position.x,game.Aircraft.Body.position.z),new Vector2(home.x,home.z));
+            float touchdown=autopilot.TouchdownSpeed,returnSeconds=autopilot.FlightSeconds;
+            game.Aircraft.InputSource=this;Command=PilotCommand.Neutral;Destroy(autopilot);yield return new WaitForSeconds(1);
             var hud=game.GetComponent<FlightHUD>();hud.SendMessage("TogglePause");yield return null;yield return Capture("05-menu.png");
             hud.SelectMenuPage(1);yield return null;yield return Capture("06-controls.png");
             hud.SelectMenuPage(2);yield return null;yield return Capture("07-bindings.png");
             hud.SelectMenuPage(3);yield return null;yield return Capture("08-assists-camera.png");
             // Scripted 0.49 then 0.47 collective: heave damping should settle near 2 m/s and peak around 18 m.
             // Both bounds matter: a regression toward the old runaway climb (54 m) fails as surely as a weak one.
-            bool passed=errors==0&&peakAltitude>=8&&peakAltitude<=32&&peakSpeed>=1.5f&&peakSpeed<=10&&!everCrashed&&startedGrounded&&game.Aircraft.Grounded;
-            File.WriteAllText(Path.Combine(output,"runtime-smoke.json"),JsonUtility.ToJson(new Report {Errors=errors,Passed=passed,FrameLimit=frameLimit,AverageFps=measuredFrames/Mathf.Max(.1f,Time.unscaledTime-measurementStart),PeakAltitude=peakAltitude,PeakSpeed=peakSpeed,StartedGrounded=startedGrounded,ResetGrounded=game.Aircraft.Grounded,EverCrashed=everCrashed,Engine=Application.unityVersion,PostProcessing=game.CameraRig.GetComponent<Camera>().GetUniversalAdditionalCameraData().renderPostProcessing,Tonemapping=VolumeManager.instance.stack.GetComponent<Tonemapping>().mode.value.ToString(),AmbientProbeL0=RenderSettings.ambientProbe[0,0]},true));
+            bool passed=errors==0&&peakAltitude>=8&&peakAltitude<=32&&peakSpeed>=1.5f&&peakSpeed<=10&&!everCrashed&&startedGrounded&&game.Aircraft.Grounded
+                &&landedHome&&touchdown<2f&&landingOffset<5f;
+            File.WriteAllText(Path.Combine(output,"runtime-smoke.json"),JsonUtility.ToJson(new Report {Errors=errors,Passed=passed,LandedHome=landedHome,LandingTouchdown=touchdown,LandingOffset=landingOffset,ReturnFlightSeconds=returnSeconds,FrameLimit=frameLimit,AverageFps=measuredFrames/Mathf.Max(.1f,Time.unscaledTime-measurementStart),PeakAltitude=peakAltitude,PeakSpeed=peakSpeed,StartedGrounded=startedGrounded,ResetGrounded=game.Aircraft.Grounded,EverCrashed=everCrashed,Engine=Application.unityVersion,PostProcessing=game.CameraRig.GetComponent<Camera>().GetUniversalAdditionalCameraData().renderPostProcessing,Tonemapping=VolumeManager.instance.stack.GetComponent<Tonemapping>().mode.value.ToString(),AmbientProbeL0=RenderSettings.ambientProbe[0,0]},true));
             if(artTour)yield return Tour();
             Application.Quit(passed&&errors==0?0:1);
         }
@@ -92,13 +107,14 @@ namespace HoverForHire
             yield return new WaitForSeconds(.25f);yield return Capture("15-hard-impact.png");
             bool graded=!effects.HasExploded;effects.ResetEffects();
             effects.PresentImpact(new AircraftImpact(home+Vector3.up*.3f,Vector3.up,Vector3.down*25,25,1050));
-            game.Aircraft.ReportCrash();
+            game.Aircraft.ReportCrash(CrashCause.ObstacleImpact,25f,game.Aircraft.Tuning.CrashImpactSpeed,"Island terrain");
             yield return new WaitForSeconds(.18f);yield return Capture("16-explosion.png");
             bool explosion=effects.HasExploded&&effects.ActiveDebrisCount>0;
             yield return new WaitForSeconds(1.2f);yield return Capture("17-wreckage.png");
+            hud.enabled=true;yield return null;yield return Capture("17b-crash-report.png");hud.enabled=false;
             game.Aircraft.ResetAt(home+Vector3.up*1.55f,Quaternion.identity);
             bool restored=!effects.HasExploded&&effects.ActiveDebrisCount==0;
-            Vector3 ocean=new Vector3(-1250,-3.5f,-600);
+            Vector3 ocean=new Vector3(-1250,WorldConstants.SeaLevel,-600);
             game.Aircraft.ResetAt(ocean+Vector3.up*.5f,Quaternion.identity);
             camera.transform.SetPositionAndRotation(ocean+new Vector3(11,4,13),Quaternion.LookRotation(ocean-(ocean+new Vector3(11,4,13))));
             effects.PresentImpact(new AircraftImpact(ocean,Vector3.up,Vector3.down*30,30,1050,true));
@@ -108,10 +124,10 @@ namespace HoverForHire
             if(!graded||!explosion||!restored||!water)errors++;
         }
         IEnumerator Capture(string file){yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,file));yield return new WaitForSecondsRealtime(.6f);}
-        void Update(){if(game==null)return;measuredFrames++;peakAltitude=Mathf.Max(peakAltitude,game.Aircraft.AltitudeAGL);peakSpeed=Mathf.Max(peakSpeed,game.Aircraft.GroundSpeed);everCrashed|=game.Aircraft.Crashed;}
+        void Update(){if(game==null)return;measuredFrames++;if(scriptedSegment){peakAltitude=Mathf.Max(peakAltitude,game.Aircraft.AltitudeAGL);peakSpeed=Mathf.Max(peakSpeed,game.Aircraft.GroundSpeed);}everCrashed|=game.Aircraft.Crashed;}
         void OnLog(string text,string stack,LogType type){if(type==LogType.Error||type==LogType.Exception||type==LogType.Assert)errors++;}
         void OnDestroy()=>Application.logMessageReceived-=OnLog;
-        [Serializable] class Report { public int Errors,FrameLimit;public float AverageFps,PeakAltitude,PeakSpeed,AmbientProbeL0;public bool Passed,StartedGrounded,ResetGrounded,EverCrashed,PostProcessing;public string Engine,Tonemapping; }
+        [Serializable] class Report { public int Errors,FrameLimit;public float AverageFps,PeakAltitude,PeakSpeed,AmbientProbeL0,LandingTouchdown,LandingOffset,ReturnFlightSeconds;public bool Passed,LandedHome,StartedGrounded,ResetGrounded,EverCrashed,PostProcessing;public string Engine,Tonemapping; }
         [Serializable] class EffectsReport { public bool HardImpactNoExplosion,CatastrophicExplosion,ResetRestored,WaterNoExplosion;public int Errors; }
     }
 }

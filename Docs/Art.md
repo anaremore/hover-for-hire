@@ -23,4 +23,8 @@ Rotor wash samples the surface below the aircraft and follows rotor speed, colle
 
 Contact events carry the incoming normal speed, aircraft mass, position and direction. Increasing impact severity adds sparks, smoke and broken parts. A fireball requires a dry impact of at least **20 m/s** and **180 kJ** of normal impact energy. Water suppresses fire and adds spray; the crashed Rigidbody continues sinking. Slow tip-overs produce a grounded wreck without an explosion. This is a game effect classification, not a fuel or structural-failure simulation.
 
+Rotors never strobe: once the rotor is above 40% of governed speed, the blades advance by at most 42% of the blade spacing per rendered frame (below the rate where the eye reads frozen or reversed blades at 30–144 fps), and a procedural streaked motion disc fades in on both rotors. Detached wreckage never carries the motion discs.
+
+Scenery rests on the actual triangulated terrain mesh (`IslandWorld.MeshHeight`), so roads and props no longer float or sink between terrain samples; road edges have skirts. Buildings beside the cut ridge and summit pads, the lighthouse keeper's house, the orchard farm and the cove houses take the flattest nearby footing. Trees, lamp posts and parked vehicles stay out of each pad's rotor-reach ring, and windsocks stand 7 m beyond the pad edge.
+
 Effect systems have bounded particle counts, with at most four detached cosmetic assemblies. Debris can bounce off world surfaces without colliding with the aircraft or affecting delivery state. Reset restores hidden meshes, removes debris, clears particles and camera shake, and stops impact audio.

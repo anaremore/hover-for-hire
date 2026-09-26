@@ -15,7 +15,7 @@ namespace HoverForHire
         public int EffectParticleCount => Count(dust)+Count(smoke)+Count(sparks)+Count(flame)+Count(splash)+Count(washStreak);
         public bool HasExploded { get; private set; }
 
-        const float SeaLevel=-3.5f;
+        const float SeaLevel=WorldConstants.SeaLevel;
         ParticleSystem dust,smoke,sparks,flame,splash,washStreak;
         Material material,fireMaterial;
         Texture2D particleTexture;
@@ -61,7 +61,7 @@ namespace HoverForHire
             fireGradient.SetKeys(new[]{new GradientColorKey(Color.white,0),new GradientColorKey(new Color(1,.82f,.36f),.16f),new GradientColorKey(new Color(1,.29f,.025f),.42f),new GradientColorKey(new Color(.20f,.055f,.012f),1)},new[]{new GradientAlphaKey(.95f,0),new GradientAlphaKey(.95f,.28f),new GradientAlphaKey(.75f,.65f),new GradientAlphaKey(0,1)});flameColor.color=fireGradient;
             impactAudio=gameObject.AddComponent<AudioSource>();impactAudio.playOnAwake=false;impactAudio.spatialBlend=0;impactAudio.clip=impactClip=MakeImpactClip();
             var lamp=new GameObject("Impact flash");lamp.transform.SetParent(transform,false);flash=lamp.AddComponent<Light>();flash.type=LightType.Point;flash.range=22;flash.color=new Color(1,.48f,.15f);flash.enabled=false;
-            var cam=Camera.main;if(cam!=null)cameraShake=cam.GetComponent<ImpactCameraShake>()??cam.gameObject.AddComponent<ImpactCameraShake>();
+            var cam=Camera.main;if(cam!=null){cameraShake=cam.GetComponent<ImpactCameraShake>();if(cameraShake==null)cameraShake=cam.gameObject.AddComponent<ImpactCameraShake>();}
             Aircraft.Impact+=PresentImpact;Aircraft.CrashedEvent+=OnCrash;Aircraft.ResetPerformed+=ResetEffects;
         }
 
@@ -108,6 +108,8 @@ namespace HoverForHire
                 hardSurface=hit.collider.name.IndexOf("terrain",StringComparison.OrdinalIgnoreCase)<0;
             }
             if(!found)return;
+            // Shallow water: the ray reaches the seabed, but the wash acts on the sea surface above it.
+            if(aboveWater&&ground.y<SeaLevel)ground.y=SeaLevel;
             float altitude=location.y-ground.y;
             float strength=Mathf.Clamp01(1-altitude/14)*Aircraft.RotorSpeed01*Aircraft.RotorSpeed01*Mathf.Clamp01(.16f+Aircraft.RawCommand.Collective*1.45f);
             if(strength<.035f||altitude<0)return;
@@ -221,6 +223,8 @@ namespace HoverForHire
                     HideRenderers(rotor.GetComponentsInChildren<Renderer>());break;
                 }
             }
+            // Wreckage never carries the translucent motion discs of a spinning rotor.
+            foreach(Transform child in fragment.GetComponentsInChildren<Transform>())if(child.name.EndsWith("motion blur",StringComparison.Ordinal))Destroy(child.gameObject);
             foreach(Transform child in fragment.GetComponentsInChildren<Transform>())child.gameObject.layer=2;
             HideRenderers(renderers);
             // Kinematic presentation debris cannot alter flight collisions, missions, or camera collision casts.

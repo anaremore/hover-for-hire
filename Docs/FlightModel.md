@@ -19,6 +19,16 @@ Moments of inertia are explicit tuning values (pitch 1,174, yaw 1,233, roll 690 
 * The atmosphere is calm in this slice, but every aerodynamic term already uses velocity relative to the air mass (`IWindSource`), so wind is a drop-in. The HUD shows the magnitude of 3D velocity relative to the air in km/h; with no wind this equals 3D ground-relative speed, and includes vertical movement. It is not indicated airspeed. The development overlay separately shows horizontal ground speed in m/s. AGL is the downward ray distance from the fuselage origin, minus the 1.5 m upright skid offset. It sees terrain and roofs, excludes the aircraft and triggers, and clamps at zero; it is not a forward terrain-warning system.
 * Grounded state requires actual upward collision contacts, not proximity to a ray surface. Loading systems should additionally enforce landing-zone distance, low vertical and horizontal velocity, upright attitude and a continuous dwell. Hard landings or fast obstacle impacts mark the helicopter crashed and let its rotor spool down; they do not freeze the aircraft.
 
+## Collision, blade strikes and water
+
+The airframe collides through seven boxes: hull and two skids carry ground contact; nose, forward and aft tail boom, horizontal stabilizer and fin make the rest of the aircraft solid. Because inertia is an explicit tuning value, these shapes do not change handling.
+
+Each rotor sweeps a **convex trigger disc** (main rotor: 4.62 m radius at the hub; tail rotor: 0.87 m, 0.3 m thick). Physics reports any overlap with terrain, buildings, props or trees every step, with no gaps between probe points, and a spinning rotor (above 25% of governed speed) that touches anything solid is a **blade strike**. The aircraft's own colliders and trigger volumes never count. Trees and rocks carry merged low-poly collision on their own layer, which rotors strike but the chase camera passes through.
+
+The sea is a surface at −3.5 m (`WorldConstants.SeaLevel`, shared with the ocean shader and effects). Skid-ground altitude measures to the water instead of the seabed, and skids more than 0.3 m under the surface **ditch** the aircraft.
+
+Every crash records a cause with the measured value and the limit it exceeded: hard landing (touchdown speed vs 5.5 m/s), rollover (tilt vs 65°), collision (impact speed vs 8 m/s), main or tail rotor strike (with the struck object), ditching, or leaving the island. The crash panel shows the cause, the numbers and one piece of advice.
+
 Ground effect, translational lift, wind, vortex-ring state, retreating-blade stall, complex failures and autorotation are deliberately deferred until human playtests establish the core hover, braking and landing tuning. Hover hold is also deferred. These omissions are significant for real aircraft operation: this game is not a certified simulator.
 
 ## Assists

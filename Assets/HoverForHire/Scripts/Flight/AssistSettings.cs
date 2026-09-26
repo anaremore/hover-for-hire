@@ -21,6 +21,21 @@ namespace HoverForHire
             TorqueCompensation = preset != AssistPreset.Unassisted;
         }
 
+        /// <summary>The preset these flags match exactly, or null for a custom combination.</summary>
+        public AssistPreset? MatchingPreset
+        {
+            get
+            {
+                foreach (AssistPreset preset in new[] { AssistPreset.Beginner, AssistPreset.Standard, AssistPreset.Unassisted })
+                {
+                    var reference = new AssistSettings();
+                    reference.SetPreset(preset);
+                    if (reference.Weights == Weights) return preset;
+                }
+                return null;
+            }
+        }
+
         public string Summary
         {
             get

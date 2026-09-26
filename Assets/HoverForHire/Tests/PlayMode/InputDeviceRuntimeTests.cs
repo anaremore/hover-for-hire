@@ -247,7 +247,11 @@ namespace HoverForHire.Tests
         {
             _input.Settings.MouseSensitivity = 0.007f;
             _input.ActionAsset.FindAction("Pause").ApplyBindingOverride(0, "<Keyboard>/p");
-            _input.SaveSettings(); // The fixture's teardown verifies both real PlayerPrefs keys are untouched.
+            _input.SaveSettings();
+            Assert.That(PlayerPrefs.HasKey(FlightInput.PreferencesKey), Is.EqualTo(_hadPreferences));
+            Assert.That(PlayerPrefs.GetString(FlightInput.PreferencesKey), Is.EqualTo(_preferencesBefore), "Suppressed rigs never write preferences.");
+            Assert.That(PlayerPrefs.GetString(FlightInput.BindingsKey), Is.EqualTo(_bindingsBefore), "Suppressed rigs never write bindings.");
+            Assert.That(_input.Settings.MouseSensitivity, Is.EqualTo(0.007f), "The change still applies to the running session.");
         }
     }
 }

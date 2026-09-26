@@ -16,6 +16,16 @@ namespace HoverForHire
             new Vector3(480, 61, 510), new Vector3(-350, 103, 450), new Vector3(-720, 17, 430), new Vector3(770, 10, 80)
         };
         static readonly string[] names = { "01 / HOME BASE", "02 / TOWN GREEN", "03 / FERRY DOCK", "04 / FREIGHT YARD", "05 / ROOFTOP CLINIC", "06 / ORCHARD", "07 / RIDGE STATION", "08 / SUMMIT LODGE", "09 / LIGHTHOUSE", "10 / EAST COVE" };
+        /// <summary>Terrain grid: cells per side and the rectangle it covers, in metres.</summary>
+        public const int TerrainCells = 220;
+        public const float TerrainSizeX = 2400, TerrainSizeZ = 2200;
+        /// <summary>Landing radius of each pad; the service rules and scenery clearances both derive from it.</summary>
+        public static float PadRadius(int index) => index == 0 ? 17 : index == 4 ? 9 : index > 5 ? 10 : 14;
+        /// <summary>Horizontal clearance kept free of trees and tall props around a pad: rotor reach from the pad edge plus margin.</summary>
+        public static float PadObstacleClearance(int index) => PadRadius(index) + 12;
+        public static IReadOnlyList<Vector3> Sites => sites;
+        /// <summary>Road centrelines (world XZ) of the most recent build; the navigation chart draws exactly these.</summary>
+        public static IReadOnlyList<Vector2[]> Roads => EnvironmentScenery.Roads;
         public static LandingZone[] Build()
         {
             root = new GameObject("PORT MERIDIAN / island").transform;
@@ -24,12 +34,12 @@ namespace HoverForHire
             Metal = Mat("Graphite", Ink); Glass = Mat("Smoked canopy", new Color(.09f,.27f,.34f), .85f);
             Signal = Mat("Rescue orange", Orange); Water = Mat("Ocean",new Color(.13f,.39f,.46f), .65f);
             Wood = Mat("Cedar",new Color(.40f,.255f,.15f)); Roof = Mat("Clay roofs", new Color(.51f,.22f,.145f));
-            Piece("Ocean", PrimitiveType.Cube, new Vector3(0,-6,0), new Vector3(10000,5,10000), Water, false);
+            Piece("Ocean", PrimitiveType.Cube, new Vector3(0,WorldConstants.SeaLevel-2.5f,0), new Vector3(10000,5,10000), Water, false);
             TerrainMesh();
             var zones = new LandingZone[sites.Length];
             for (int i=0;i<sites.Length;i++)
             {
-                var p = sites[i]; float radius = i == 0 ? 17 : i == 4 ? 9 : i > 5 ? 10 : 14;
+                var p = sites[i]; float radius = PadRadius(i);
                 if(i==4) Piece("Clinic tower",PrimitiveType.Cube,new Vector3(p.x,21.85f,p.z),new Vector3(34,41.7f,34),White);
                 else Piece("Landing foundation",PrimitiveType.Cube,p-Vector3.up*.85f,new Vector3(radius*2+6,1.4f,radius*2+6),Stone);
                 var pad = Piece(names[i],PrimitiveType.Cylinder,p-Vector3.up*.12f,new Vector3(radius*2,.12f,radius*2),Asphalt);
@@ -39,7 +49,8 @@ namespace HoverForHire
                 foreach(float dx in new[]{-2.2f,2.2f}) Piece("H",PrimitiveType.Cube,p+new Vector3(dx,.04f,0),new Vector3(.85f,.06f,7),White,false);
                 Piece("H crossbar",PrimitiveType.Cube,p+Vector3.up*.04f,new Vector3(5,.06f,.85f),White,false);
                 for(int n=0;n<24;n++) { float a=n*15*Mathf.Deg2Rad; var marker=Piece("Perimeter",PrimitiveType.Cube,p+new Vector3(Mathf.Sin(a)*(radius-1),.05f,Mathf.Cos(a)*(radius-1)),new Vector3(1.6f,.07f,.4f),Signal,false);marker.transform.rotation=Quaternion.Euler(0,n*15,0); }
-                var pole=p+new Vector3(radius+3,3,0); Piece("Windsock pole",PrimitiveType.Cylinder,pole,new Vector3(.15f,3,.15f),White);
+                // The windsock stands outside the rotor's reach from anywhere on the pad.
+                var pole=p+new Vector3(radius+7,3,0); Piece("Windsock pole",PrimitiveType.Cylinder,pole,new Vector3(.15f,3,.15f),White);
                 var sock=Piece("Windsock",PrimitiveType.Capsule,pole+new Vector3(1.1f,2.8f,0),new Vector3(.55f,1.2f,.55f),Signal,false);sock.transform.rotation=Quaternion.Euler(0,0,80);
             }
             EnvironmentScenery.Build(root,sites);
@@ -52,6 +63,21 @@ namespace HoverForHire
             float hills=130*Mathf.Exp(-((x+300)*(x+300)+(z-490)*(z-490))/80000f)+72*Mathf.Exp(-((x-490)*(x-490)+(z-500)*(z-500))/100000f);
             return Mathf.Lerp(8+hills,-18,Mathf.SmoothStep(0,1,Mathf.InverseLerp(.8f,1.1f,edge)));
         }
+        /// <summary>
+        /// Height of the rendered and colliding terrain mesh, which is triangulated between grid samples of
+        /// <see cref="Height"/>. Scenery resting on the ground should use this so it neither floats nor sinks.
+        /// </summary>
+        public static float MeshHeight(float x,float z)
+        {
+            const int n=TerrainCells;
+            float gx=(x/TerrainSizeX+.5f)*n,gz=(z/TerrainSizeZ+.5f)*n;
+            int ix=Mathf.Clamp(Mathf.FloorToInt(gx),0,n-1),iz=Mathf.Clamp(Mathf.FloorToInt(gz),0,n-1);
+            float fx=Mathf.Clamp01(gx-ix),fz=Mathf.Clamp01(gz-iz);
+            float h00=GridHeight(ix,iz),h10=GridHeight(ix+1,iz),h01=GridHeight(ix,iz+1),h11=GridHeight(ix+1,iz+1);
+            // Each cell is split along the diagonal from (x+1,z) to (x,z+1), as in TerrainMesh.
+            return fx+fz<=1?h00+(h10-h00)*fx+(h01-h00)*fz:h11+(h01-h11)*(1-fx)+(h10-h11)*(1-fz);
+        }
+        static float GridHeight(int ix,int iz)=>Height((ix/(float)TerrainCells-.5f)*TerrainSizeX,(iz/(float)TerrainCells-.5f)*TerrainSizeZ);
         public static float Height(float x,float z)
         {
             float y=BaseHeight(x,z);
@@ -60,10 +86,10 @@ namespace HoverForHire
         }
         static void TerrainMesh()
         {
-            const int n=220; var verts=new Vector3[(n+1)*(n+1)];var colors=new Color[verts.Length];var uv=new Vector2[verts.Length];var tris=new int[n*n*6];
+            const int n=TerrainCells; var verts=new Vector3[(n+1)*(n+1)];var colors=new Color[verts.Length];var uv=new Vector2[verts.Length];var tris=new int[n*n*6];
             for(int z=0;z<=n;z++)for(int x=0;x<=n;x++)
             {
-                int k=z*(n+1)+x;float px=(x/(float)n-.5f)*2400,pz=(z/(float)n-.5f)*2200,y=Height(px,pz);verts[k]=new Vector3(px,y,pz);uv[k]=new Vector2(px/32,pz/32);
+                int k=z*(n+1)+x;float px=(x/(float)n-.5f)*TerrainSizeX,pz=(z/(float)n-.5f)*TerrainSizeZ,y=Height(px,pz);verts[k]=new Vector3(px,y,pz);uv[k]=new Vector2(px/32,pz/32);
                 float slope=new Vector2(Height(px+3,pz)-Height(px-3,pz),Height(px,pz+3)-Height(px,pz-3)).magnitude/6;
                 float beach=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(1,6.5f,y));
                 float stone=Mathf.Clamp01(Mathf.InverseLerp(.22f,.62f,slope)+(y>55?(Mathf.PerlinNoise(px*.009f,pz*.009f)-.45f)*1.4f:0));

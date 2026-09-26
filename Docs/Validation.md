@@ -2,6 +2,44 @@
 
 Status snapshot: **26 September 2026, Unity 6000.3.22f1** (phase 1 of the 0.3 overhaul; the 0.2.0 and 0.1.0 sections below are kept as the baseline). The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
 
+## Collision, water and onboarding (0.3 development, phase 2)
+
+**26 September 2026.** This phase adds complete collision, blade strikes and water, and closes the onboarding gaps.
+- **Collision:** seven airframe boxes; merged low-poly collision for trees, rocks and props; solid roofs, apron and freight slabs.
+- **Blade strikes:** exact convex rotor-disc sensors for the main and tail rotors.
+- **Water:** the sea is a surface and the aircraft can ditch.
+- **Crash panel:** shows the cause, the measured value and the limit.
+- **World fixes:** scenery on the triangulated terrain mesh; buildings on flat footing; props kept out of rotor reach; all 20 roads on the chart.
+- **Visuals and onboarding:** non-strobing rotors with motion discs; a welcome panel; binding-aware hints; Enter starts a shift from Free Flight.
+- **Autopilot:** a diagnostic autopilot flies automated routes.
+
+Automated results: **87 EditMode** and **47 PlayMode** tests passed.
+- **Test repairs:** the tests that could not fail now can:
+  - momentum release applies and releases cyclic;
+  - preference suppression asserts in the body;
+  - the camera test has its own collider in the sweep path, plus a control case;
+  - the deadline test really retries;
+  - banking is checked with physics.
+- **New coverage:**
+  - rotor/tail strikes and trigger immunity;
+  - ditching and altitude over water;
+  - crash causes;
+  - the production contract table;
+  - a rotor-clear landing at eight edge positions on all ten pads;
+  - approach columns;
+  - road count;
+  - apron collision;
+  - a complete passenger delivery flown by physics.
+
+| Flown check | Result |
+| --- | --- |
+| Passenger job, Home Base → Town Green (`FlownDeliveryTests`) | Loaded, flew about 390 m and delivered: 71 s flight, peak 36 m AGL, 1.5 m from pad centre, touchdown 0.52 m/s, grade A (99) |
+| Smoke flight returns and lands home (autopilot, no teleport), 30 / 60 / 144 fps | Landed at all three: touchdown 0.06 m/s, 0.6 m from centre, 49 s return, identical across frame rates |
+| Scripted smoke segment peak AGL / ground speed | 19.92–19.96 m / 3.55 m/s (average 29.9, 59.6 and 142.3 fps) |
+| Effects diagnostics | Graded impact, explosion, reset restore and water suppression all passed |
+
+Screenshots confirm the welcome panel and footer use the live bindings (Shift/Ctrl collective). They also confirm the crash panel reads "COLLISION · Hit the ground at 25.0 m/s. The limit is 8.0 m/s.", the minimap draws the full town grid, and the rotors show motion discs instead of strobing blades.
+
 ## Flight-feel foundation (0.3 development, phase 1)
 
 **26 September 2026, Unity 6000.3.22f1.** This phase adds heave (inflow) damping, rotor pitch/roll/yaw damping with rate-loop feed-forward, tail-fin weathervaning, turn coordination in yaw stabilization, explicit inertia, fine-then-coarse digital collective/pedal ramps, a hover-power tick, the *Sim pedals* gamepad layout and a 50 Hz flight recorder. Each new physics term is a tuning value where zero restores 0.2 behavior.

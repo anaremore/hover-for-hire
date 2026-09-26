@@ -20,6 +20,7 @@ namespace HoverForHire
             sun.transform.rotation=Quaternion.Euler(26,-38,0); sun.shadows=LightShadows.Soft;
             sun.shadowBias=.035f; sun.shadowNormalBias=.25f; sun.shadowStrength=.78f;
             RenderSettings.sun=sun;
+            Shader.SetGlobalFloat(WorldConstants.SeaLevelShaderId,WorldConstants.SeaLevel);
             var sky=Resources.Load<Material>("Art/Materials/Sky");
             if(sky!=null) { RenderSettings.skybox=new Material(sky); RenderSettings.skybox.SetVector("_SunDirection",-sun.transform.forward); }
             ApplySurface(IslandWorld.Ground,"Art/Materials/Terrain");

@@ -9,7 +9,8 @@ namespace HoverForHire
         public Transform Target;
         public FlightInput Input;
         public Transform CockpitMount;
-        public LayerMask ObstacleMask = ~(1 << 8);
+        // Terrain and structures pull the camera in; the aircraft itself and tree foliage never do.
+        public LayerMask ObstacleMask = ~((1 << WorldConstants.AircraftLayer) | (1 << WorldConstants.VegetationLayer));
         [Min(0.05f)] public float CollisionRadius = 0.4f;
         public bool IsCockpit { get; private set; }
 

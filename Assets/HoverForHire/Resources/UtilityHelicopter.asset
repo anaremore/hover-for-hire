@@ -41,6 +41,12 @@ MonoBehaviour:
   HeaveDampingNsPerM: 400
   RotorRateDampingPerSecond: {x: 2.5, y: 1, z: 2.5}
   WeathervaneCoefficient: 3
+  MainRotorHub: {x: 0, y: 2.055, z: -0.07}
+  MainRotorRadius: 4.62
+  TailRotorHub: {x: 0.3, y: 0.9, z: -5.09}
+  TailRotorRadius: 0.87
+  RotorDiscThickness: 0.3
+  RotorStrikeMinimumSpeed01: 0.25
   SkidClearanceMeters: 1.5
   AltitudeRayLengthMeters: 3000
   GroundNormalThreshold: 0.65

@@ -6,7 +6,7 @@ The vertical slice uses the same Rigidbody aircraft in every mode. `MissionSessi
 
 A shift lasts 15 minutes of game time; pausing stops the timer. The first two offers are **Town connection** (160 kg of passengers, home base to town) and **Ferry provisions** (230 kg of internal cargo, town to the ferry dock). Both are immediately available. After two successful deliveries, workshop, clinic and orchard offers unlock. After four, ridge, summit, lighthouse and east cove offers unlock. The original helicopter remains unchanged.
 
-`BrowseNextJob()` cycles unlocked offers before acceptance, so the pilot can continue taking the generous beginner routes. `AcceptNextJob()` accepts the displayed offer; after a delivered job it selects and accepts the next offer. Loading and unloading are automatic when the service conditions are met. `Interact()` accepts an offer or retries a failed job; it never bypasses service conditions.
+From Free Flight, the Interact key starts a shift: immediately when the aircraft is on the home pad, otherwise after a second press within four seconds (the shift begins at home base). `BrowseNextJob()` cycles unlocked offers before acceptance, so the pilot can continue taking the generous beginner routes. `AcceptNextJob()` accepts the displayed offer; after a delivered job it selects and accepts the next offer. Loading and unloading are automatic when the service conditions are met. `Interact()` accepts an offer or retries a failed job; it never bypasses service conditions.
 
 Each contract supplies pickup and destination, passenger/cargo type, payload mass, base pay, expected duration, deadline and service limits. Early contracts allow three times their expected duration before failure. Later contracts allow twice the expected duration. Expected duration includes generous takeoff and landing time plus route distance; it is a score target, not a countdown to failure. Retries keep the shift clock running.
 
@@ -61,6 +61,8 @@ The primary public surface is `Mode`, `CurrentObjective`, `StatusText`, `TargetZ
 ## Verification
 
 Edit Mode tests cover passenger/cargo round trips, grounded/elevation checks, every stability condition resetting dwell, crash/deadline failure, retry requiring a fresh pickup, terminal payout guards, rough handling scoring, persisted duplicate IDs, JSON round trip, backup recovery after corruption or interrupted replacement, training without payment, every drill's completion path, uninterrupted hover, and rejection of stationary or hard landing completion.
+
+`FlownDeliveryTests` flies a complete passenger job over the production island with no relocation: a diagnostic autopilot supplies ordinary bounded pilot commands (cyclic, pedals, collective) to the real aircraft, which loads at home base, flies about 390 m to Town Green, lands and unloads (65–71 s of flight, touchdown ≈0.5 m/s, grade A). The same autopilot lands the smoke flight back at home base instead of teleporting it.
 
 Play Mode integration tests use the actual aircraft, skid/pad colliders and director with scripted physics. They exercise a passenger and cargo sequence, loaded mass, uninterrupted grounded dwell, persisted payouts, repeated post-delivery reset, external reset failure and retry, shift expiry while unloading, and an unrelated roof above the destination. Each fixture sets `ProgressionPathOverride` before its inactive manager awakens, keeping all test saves separate from player progression. Fixture relocation between pads isolates service integration from route handling.
 

@@ -14,6 +14,7 @@ Shader "Hover for Hire/Coastal Ocean"
             #pragma multi_compile_fog
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             TEXTURE2D(_CoastHeight); SAMPLER(sampler_CoastHeight);
+            float _HFH_SeaLevel; // Global, set from WorldConstants.SeaLevel.
             struct A { float4 vertex:POSITION; };
             struct V { float4 vertex:SV_POSITION; float3 world:TEXCOORD0; half fog:TEXCOORD1; };
             V Vert(A i) { V o; o.world=TransformObjectToWorld(i.vertex.xyz); o.vertex=TransformWorldToHClip(o.world); o.fog=ComputeFogFactor(o.vertex.z); return o; }
@@ -29,7 +30,7 @@ Shader "Hover for Hire/Coastal Ocean"
                 float2 uv=p/float2(2400,2200)+.5;
                 float land=SAMPLE_TEXTURE2D(_CoastHeight,sampler_CoastHeight,uv).r*240-40;
                 float inside=step(0,uv.x)*step(uv.x,1)*step(0,uv.y)*step(uv.y,1);
-                float depth=lerp(100,max(.1,-3.5-land),inside);
+                float depth=lerp(100,max(.1,_HFH_SeaLevel-land),inside);
                 half3 water=lerp(half3(.025,.28,.26),half3(.016,.075,.12),saturate(depth/24));
                 half fresnel=pow(1-saturate(dot(n,view)),4);
                 half3 reflected=lerp(half3(.28,.44,.52),half3(.57,.64,.66),saturate(view.y));

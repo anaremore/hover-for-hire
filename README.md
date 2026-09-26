@@ -20,6 +20,8 @@ If setup assets ever need regeneration, use **Hover for Hire → Prepare project
 - Fixed-step Rigidbody lift, rotor torque, cyclic authority, explicit inertia, aerodynamic drag, payload mass, compound skid contact, impact damage, and recovery.
 - Rotor aerodynamics that make the helicopter settle like one: heave (inflow) damping so collective sets a climb rate within seconds, main/tail rotor rate damping in every assist mode, and tail-fin weathervaning in forward flight and crosswinds.
 - Independent rate stabilization (with feed-forward), auto-level, yaw stabilization with coordinated turns at speed, and rotor torque compensation with Beginner, Standard, and Unassisted presets. Assists blend through bounded commands; turning them off removes their stabilization commands.
+- Complete collision: merged low-poly collision for about 3,200 trees and rocks, props, roofs, cranes and masts; exact rotor-disc blade-strike detection for main and tail rotors; a solid sea surface with ditching; crash panels that name the cause, the measured value and the limit.
+- A first-launch welcome, key hints that follow your bindings and device, Enter to start a shift from Free Flight, announced assist presets, and non-strobing rotors with motion discs.
 - Fine-then-coarse digital collective and pedal ramps, a hover-power tick on the collective gauge, a *Sim pedals* gamepad layout with analog trigger pedals, and a 50 Hz flight data recorder for playtest analysis.
 - Rebindable keyboard/mouse, gamepad, and absolute collective binding. Persistent collective, two mouse cyclic modes, free look hold/return options, saved bindings and preferences.
 - Chase and cockpit cameras with free look, smoothing, collision handling, and recentering.

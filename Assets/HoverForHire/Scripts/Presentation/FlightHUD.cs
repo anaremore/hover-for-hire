@@ -17,13 +17,6 @@ namespace HoverForHire
         Vector2Int menuDirection; float menuRepeatAt;
         const float Height=720;
         float Width=1280;
-        static readonly Vector2[][] ChartRoads = {
-            new[]{new Vector2(-850,-320),new Vector2(-690,-350),new Vector2(-490,-350),new Vector2(-190,-350),new Vector2(110,-350),new Vector2(365,-350),new Vector2(401,-395),new Vector2(553,-395)},
-            new[]{new Vector2(-690,-350),new Vector2(-655,-140),new Vector2(-643,95),new Vector2(-660,260),new Vector2(-699,370),new Vector2(-701,400)},
-            new[]{new Vector2(-190,-350),new Vector2(-190,-248),new Vector2(-149,-242),new Vector2(-144,-151),new Vector2(-190,-151),new Vector2(-190,-64),new Vector2(-190,113)},
-            new[]{new Vector2(-54,88),new Vector2(45,148),new Vector2(144,202),new Vector2(241,224),new Vector2(292,318),new Vector2(363,419),new Vector2(440,471)},
-            new[]{new Vector2(365,-350),new Vector2(550,-238),new Vector2(649,-127),new Vector2(708,-28),new Vector2(728,72)}
-        };
         HelicopterController Aircraft=>Game.Aircraft;
         FlightInput Input=>Game.Input;
         MissionDirector Missions=>Game.Missions;
@@ -34,12 +27,33 @@ namespace HoverForHire
             Missions.FeedbackEvent+=MissionFeedback;
             try { if(PlayerPrefs.HasKey("hfh.assists"))JsonUtility.FromJsonOverwrite(PlayerPrefs.GetString("hfh.assists"),Aircraft.Assists); }catch(Exception){ }
             Audio.Volume=PlayerPrefs.GetFloat("hfh.volume",.65f);
+            firstRun=!PlayerPrefs.HasKey(FirstRunKey);
             Missions.StartFreeFlight();
         }
         void ResetInput(){Input.ResetCommand();Game.CameraRig.SnapToTarget();}
+        const string FirstRunKey="HoverForHire.FirstRunComplete.v1";
+        bool firstRun;
+        float shiftConfirmUntil;
+        string footerHint="";
         void Update()
         {
             UpdateMenuNavigation();
+            footerHint=BuildFooterHint(); // Once per frame, not once per IMGUI event.
+        }
+        string Key(string action)=>Input.BindingLabel(action,Input.LastInputWasGamepad);
+        string BuildFooterHint()
+        {
+            string job=Missions.Mode==GameMode.FreeFlight?"Start shift":Missions.Mode==GameMode.Training?"Next drill":"Job";
+            return $"{Key("Pause")}  Flight desk    {Key("CollectiveIncrease")} / {Key("CollectiveDecrease")}  Collective    {Key("SwitchCamera")}  Camera    {Key("FreeLook")}  Look    {Key("Interact")}  {job}    {Key("Reset")}  Reset";
+        }
+        /// <summary>Diagnostics only: show the new-pilot panel for a capture without reading or writing preferences.</summary>
+        public void PreviewFirstRun()=>firstRun=true;
+        /// <summary>Hide the new-pilot panel; remember=false (diagnostics) leaves the player's first launch untouched.</summary>
+        public void DismissFirstRun(bool remember=true)
+        {
+            if(!firstRun)return;
+            firstRun=false;
+            if(remember){PlayerPrefs.SetInt(FirstRunKey,1);PlayerPrefs.Save();}
         }
         void MissionFeedback(string message)
         {
@@ -54,12 +68,33 @@ namespace HoverForHire
             noticeUntil=Time.unscaledTime+6;
         }
         void HoverNotice(){notice="Hover hold is deferred. Use rate / level assist and practice a steady collective.";noticeUntil=Time.unscaledTime+6;}
-        void CycleAssists(){preset=(preset+1)%3;Aircraft.SetPreset((AssistPreset)preset);Save();}
-        void TogglePause()=>SetPause(!paused);
+        void CycleAssists()
+        {
+            AssistPreset? current=Aircraft.Assists.MatchingPreset;
+            preset=current.HasValue?((int)current.Value+1)%3:0;
+            Aircraft.SetPreset((AssistPreset)preset);Save();
+            notice=$"Assists: {(AssistPreset)preset}  ·  {Aircraft.Assists.Summary}";noticeUntil=Time.unscaledTime+4;
+        }
+        void TogglePause(){DismissFirstRun();SetPause(!paused);}
         public void SelectMenuPage(int index){page=Mathf.Clamp(index,0,3);scroll=Vector2.zero;menuFocus=0;}
         void SetPause(bool state){paused=state;Input.SetPaused(state);Time.timeScale=state?0:1;menuActivate=false;menuAdjust=0;menuDirection=Vector2Int.zero;if(!state)Save();}
-        void Retry(){Missions.Retry();Input.ResetCommand();notice="Reset complete. Collective is at 0%.";noticeUntil=Time.unscaledTime+4;}
-        void Interact(){if(!paused)Missions.Interact();}
+        void Retry(){DismissFirstRun();Missions.Retry();Input.ResetCommand();notice="Reset complete. Collective is at 0%.";noticeUntil=Time.unscaledTime+4;}
+        void Interact()
+        {
+            if(paused)return;
+            if(firstRun){DismissFirstRun();Missions.StartTraining(0);Input.ResetCommand();return;}
+            if(Missions.Mode==GameMode.FreeFlight)
+            {
+                // Starting a shift returns the aircraft to home base: immediate when already there, confirmed otherwise.
+                var home=Game.Zones!=null&&Game.Zones.Length>0?Game.Zones[0]:null;
+                bool atHome=home!=null&&Aircraft.Grounded&&Vector3.Distance(Aircraft.transform.position,home.transform.position)<home.Radius+2;
+                if(atHome||Time.unscaledTime<shiftConfirmUntil){shiftConfirmUntil=0;Missions.StartShift();Input.ResetCommand();return;}
+                shiftConfirmUntil=Time.unscaledTime+4;
+                notice=$"Press {Key("Interact")} again to start a delivery shift from home base.";noticeUntil=shiftConfirmUntil;
+                return;
+            }
+            Missions.Interact();
+        }
         void Save(){Input.SaveSettings();PlayerPrefs.SetString("hfh.assists",JsonUtility.ToJson(Aircraft.Assists));PlayerPrefs.SetFloat("hfh.volume",Audio.Volume);PlayerPrefs.Save();}
         void Styles()
         {
@@ -105,7 +140,7 @@ namespace HoverForHire
             float scale=Screen.height/Height;Width=Screen.width/scale;
             GUI.matrix=Matrix4x4.Scale(new Vector3(scale,scale,1));
             DrawMission();DrawInstruments();DrawMap();DrawTarget();
-            Text(new Rect(26,690,760,20),"ESC  Flight desk    V  Camera    ALT / MMB  Look    C  Center    ENTER  Job",hudSmall,FlightHudGraphics.Muted);
+            Text(new Rect(26,690,960,20),footerHint,hudSmall,FlightHudGraphics.Muted);
             if(Time.unscaledTime<noticeUntil)
             {
                 var r=new Rect(Width/2-257,535,514,48);Box(r,.72f);
@@ -116,13 +151,24 @@ namespace HoverForHire
             if(Aircraft.Crashed)
             {
                 var r=new Rect(Width/2-255,248,510,190);Box(r,.97f);FlightHudGraphics.Fill(new Rect(r.x,r.y,r.width,3),FlightHudGraphics.Amber);
-                GUI.Label(new Rect(r.x+24,r.y+22,462,38),"AIRCRAFT RECOVERY",title);
-                GUI.Label(new Rect(r.x+24,r.y+74,462,46),"Flight ended. Reset at the pad and try a slower approach.",label);
-                if(GUI.Button(new Rect(r.x+24,r.y+132,462,44),"Retry  /  Backspace",button))Retry();
+                CrashCause cause=Aircraft.LastCrashCause;
+                GUI.Label(new Rect(r.x+24,r.y+18,462,38),CrashReport.Title(cause),title);
+                GUI.Label(new Rect(r.x+24,r.y+58,462,26),CrashReport.Detail(cause,Aircraft.CrashValue,Aircraft.CrashLimit,Aircraft.CrashObstacle),label);
+                GUI.Label(new Rect(r.x+24,r.y+86,462,44),CrashReport.Advice(cause),small);
+                if(GUI.Button(new Rect(r.x+24,r.y+132,462,44),$"Retry  /  {Key("Reset")}",button))Retry();
             }
+            if(firstRun&&!paused&&!Aircraft.Crashed)DrawFirstRun();
             if(debug)DrawDebug();
             if(paused)DrawMenu();
             GUI.matrix=previous;
+        }
+        void DrawFirstRun()
+        {
+            var r=new Rect(Width/2-290,232,580,178);Box(r,.95f);FlightHudGraphics.Fill(new Rect(r.x,r.y,r.width,3),FlightHudGraphics.Amber);
+            Text(new Rect(r.x+24,r.y+16,532,20),"MERIDIAN AIR SERVICE  /  NEW PILOT",hudSmall,FlightHudGraphics.Amber);
+            GUI.Label(new Rect(r.x+24,r.y+40,532,36),"Welcome to Port Meridian",title);
+            GUI.Label(new Rect(r.x+24,r.y+82,532,44),$"Collective sets lift: hold {Key("CollectiveIncrease")} to raise it gently, {Key("CollectiveDecrease")} to lower it. The Takeoff drill teaches it one step at a time.",small);
+            Text(new Rect(r.x+24,r.y+140,532,22),$"{Key("Interact")}  Start the Takeoff drill      {Key("Pause")}  Flight desk      {Key("Reset")}  Just fly",hudSmall,FlightHudGraphics.Paper);
         }
         void Box(Rect rect,float alpha)=>FlightHudGraphics.Fill(rect,new Color(.045f,.065f,.053f,alpha));
         void Bar(Rect rect,float progress,Color color){Box(rect,.8f);var old=GUI.color;GUI.color=color;GUI.DrawTexture(new Rect(rect.x,rect.y,rect.width*Mathf.Clamp01(progress),rect.height),white);GUI.color=old;}
@@ -314,7 +360,7 @@ namespace HoverForHire
             FlightHudGraphics.Frame(frame,new Color(.8f,.94f,.7f,.42f));
             Text(new Rect(frame.x+11,frame.y+6,180,22),"MERIDIAN  /  NAV",hudSmall);
             Text(new Rect(frame.x+189,frame.y+6,23,22),"N ↑",hudSmall,FlightHudGraphics.Paper);
-            foreach(Vector2[] road in ChartRoads)for(int i=1;i<road.Length;i++)
+            foreach(Vector2[] road in IslandWorld.Roads)for(int i=1;i<road.Length;i++)
                 MapRoad(r,new Vector3(road[i-1].x,0,road[i-1].y),new Vector3(road[i].x,0,road[i].y));
             Vector2 here=MapPosition(r,Aircraft.transform.position);
             if(Missions.TargetZone!=null)

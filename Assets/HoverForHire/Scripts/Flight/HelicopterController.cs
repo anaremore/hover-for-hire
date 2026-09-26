@@ -15,9 +15,19 @@ namespace HoverForHire
         public AssistSettings Assists = new AssistSettings();
         /// <summary>Optional air-mass motion. Null is calm air.</summary>
         public IWindSource Wind;
+        /// <summary>World water surface height (m). Negative infinity means no water.</summary>
+        public float WaterSurfaceHeight = float.NegativeInfinity;
+        [Tooltip("Layers the spinning rotors can strike. The aircraft's own colliders are always ignored.")]
+        public LayerMask RotorClearanceMask = ~0;
 
         public bool Grounded => supports.Count > 0 && (Body == null ? transform.up : Body.rotation * Vector3.up).y > 0.4f;
         public bool Crashed { get; private set; }
+        /// <summary>Why the last flight ended, with the measured value and the limit it exceeded (units depend on cause).</summary>
+        public CrashCause LastCrashCause { get; private set; }
+        public float CrashValue { get; private set; }
+        public float CrashLimit { get; private set; }
+        /// <summary>Name of the struck object for rotor strikes and obstacle impacts, when known.</summary>
+        public string CrashObstacle { get; private set; } = "";
         /// <summary>Vertical clearance beneath the fuselage origin, less upright skid clearance.</summary>
         public float AltitudeAGL { get; private set; }
         public float GroundSpeed => Body == null ? 0f : Vector3.ProjectOnPlane(Body.linearVelocity, Vector3.up).magnitude;
@@ -59,6 +69,7 @@ namespace HoverForHire
 
         private readonly HashSet<Collider> supports = new HashSet<Collider>();
         private readonly RaycastHit[] altitudeHits = new RaycastHit[32];
+        private readonly List<Mesh> sensorMeshes = new List<Mesh>();
         private readonly AssistSolver solver = new AssistSolver();
         private Vector3 prePhysicsVelocity;
         private bool ownsTuning;
@@ -86,6 +97,33 @@ namespace HoverForHire
             SetPayload(PayloadKg);
             solver.Reset(Assists, PilotCommand.Neutral);
             UpdateAltitude();
+            CreateRotorSensor("Main rotor clearance", Tuning.MainRotorHub, Tuning.MainRotorRadius, false, CrashCause.RotorStrike);
+            CreateRotorSensor("Tail rotor clearance", Tuning.TailRotorHub, Tuning.TailRotorRadius, true, CrashCause.TailRotorStrike);
+        }
+
+        /// <summary>A convex trigger disc swept by each rotor; physics reports any overlap exactly, with no probe gaps.</summary>
+        private void CreateRotorSensor(string name, Vector3 hub, float radius, bool tail, CrashCause cause)
+        {
+            var sensorObject = new GameObject(name) { layer = gameObject.layer };
+            sensorObject.transform.SetParent(transform, false);
+            Mesh mesh = RotorDiscSensor.DiscMesh(name, hub, radius, Tuning.RotorDiscThickness, tail);
+            sensorMeshes.Add(mesh);
+            var volume = sensorObject.AddComponent<MeshCollider>();
+            volume.sharedMesh = mesh;
+            volume.convex = true;
+            volume.isTrigger = true;
+            var sensor = sensorObject.AddComponent<RotorDiscSensor>();
+            sensor.Owner = this;
+            sensor.Cause = cause;
+        }
+
+        /// <summary>A spinning rotor touched something solid: a blade strike ends the flight.</summary>
+        public void ReportRotorContact(CrashCause cause, Collider other)
+        {
+            if (Crashed || other == null || other.isTrigger || Tuning == null || RotorSpeed01 < Tuning.RotorStrikeMinimumSpeed01) return;
+            if (other.attachedRigidbody == Body || other.transform.IsChildOf(transform)) return;
+            if (((1 << other.gameObject.layer) & RotorClearanceMask) == 0) return;
+            ReportCrash(cause, 0f, 0f, other.name);
         }
 
         public void SetPreset(AssistPreset preset)
@@ -115,6 +153,7 @@ namespace HoverForHire
             if (Tuning == null || Body == null) return;
             supports.RemoveWhere(IsInvalidSupport);
             UpdateAltitude();
+            CheckWater();
             float dt = Time.fixedDeltaTime;
             prePhysicsVelocity = Body.linearVelocity;
             RawCommand = !Crashed && InputSource is IFlightInput input ? input.Command.Clamped() : PilotCommand.Neutral;
@@ -147,6 +186,15 @@ namespace HoverForHire
             Body.AddRelativeTorque(FlightMath.AerodynamicDrag(localAngular, Tuning.AngularDrag, Vector3.zero), ForceMode.Force);
         }
 
+        private bool HasWater => !float.IsNegativeInfinity(WaterSurfaceHeight);
+
+        private void CheckWater()
+        {
+            if (Crashed || !HasWater) return;
+            float skids = Body.position.y - Tuning.SkidClearanceMeters;
+            if (skids < WaterSurfaceHeight - 0.3f) ReportCrash(CrashCause.Ditching, WaterSurfaceHeight - skids, 0.3f, "water");
+        }
+
         private static bool IsInvalidSupport(Collider support) => support == null || !support.enabled || !support.gameObject.activeInHierarchy;
 
         private void UpdateAltitude()
@@ -163,6 +211,8 @@ namespace HoverForHire
                 if (hit.rigidbody == Body || hit.collider.transform.IsChildOf(transform)) continue;
                 closest = Mathf.Min(closest, hit.distance);
             }
+            // Water is a surface too: without this the ray would measure to the seabed.
+            if (HasWater) closest = Mathf.Min(closest, Mathf.Max(0f, origin.y - WaterSurfaceHeight));
             AltitudeAGL = Mathf.Max(0f, closest - rayOriginOffset - Tuning.SkidClearanceMeters);
         }
 
@@ -201,17 +251,27 @@ namespace HoverForHire
                     Mathf.Max(normalImpact, newTouchdown ? LastTouchdownSpeed : 0), Body.mass));
 
             if (Crashed) return;
-            bool hardLanding = newTouchdown && LastTouchdownSpeed > Tuning.CrashVerticalSpeed;
-            bool tipOver = supported && Vector3.Angle(Body.rotation * Vector3.up, Vector3.up) > Tuning.MaximumLandingTiltDegrees;
-            bool obstacleImpact = entering && normalImpact > Tuning.CrashImpactSpeed;
-            if (hardLanding || tipOver || obstacleImpact) ReportCrash();
+            float tilt = Vector3.Angle(Body.rotation * Vector3.up, Vector3.up);
+            if (newTouchdown && LastTouchdownSpeed > Tuning.CrashVerticalSpeed)
+                ReportCrash(CrashCause.HardLanding, LastTouchdownSpeed, Tuning.CrashVerticalSpeed, collision.collider.name);
+            else if (supported && tilt > Tuning.MaximumLandingTiltDegrees)
+                ReportCrash(CrashCause.TipOver, tilt, Tuning.MaximumLandingTiltDegrees, collision.collider.name);
+            else if (entering && normalImpact > Tuning.CrashImpactSpeed)
+                ReportCrash(CrashCause.ObstacleImpact, normalImpact, Tuning.CrashImpactSpeed, collision.collider.name);
         }
 
         /// <summary>World hazards can report a crash without embedding map rules in flight physics.</summary>
-        public void ReportCrash()
+        public void ReportCrash() => ReportCrash(CrashCause.Hazard);
+
+        /// <summary>End the flight once, recording the cause, the measured value and the limit it exceeded.</summary>
+        public void ReportCrash(CrashCause cause, float value = 0f, float limit = 0f, string obstacle = "")
         {
             if (Crashed) return;
             Crashed = true;
+            LastCrashCause = cause;
+            CrashValue = value;
+            CrashLimit = limit;
+            CrashObstacle = obstacle ?? "";
             CrashedEvent?.Invoke();
         }
 
@@ -220,6 +280,9 @@ namespace HoverForHire
         {
             supports.Clear();
             Crashed = false;
+            LastCrashCause = CrashCause.None;
+            CrashValue = CrashLimit = 0f;
+            CrashObstacle = "";
             LastTouchdownSpeed = 0f;
             LiftNewtons = 0f;
             RotorSpeed01 = 1f;
@@ -243,6 +306,7 @@ namespace HoverForHire
 
         private void OnDestroy()
         {
+            foreach (Mesh mesh in sensorMeshes) if (mesh != null) { if (Application.isPlaying) Destroy(mesh); else DestroyImmediate(mesh); }
             if (ownsTuning && Tuning != null)
             {
                 if (Application.isPlaying) Destroy(Tuning);

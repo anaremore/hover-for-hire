@@ -18,6 +18,8 @@ namespace HoverForHire
         public bool IsPaused { get; private set; }
         public bool IsFreeLooking { get; private set; }
         public bool IsRebinding => _rebind != null;
+        /// <summary>True when the most recent deliberate input came from a gamepad; drives on-screen key hints.</summary>
+        public bool LastInputWasGamepad { get; private set; }
         public Vector2 CameraLookDelta { get; private set; }
         public Vector2 MenuMove { get; private set; }
         public bool MenuSubmitPressed { get; private set; }
@@ -90,6 +92,7 @@ namespace HoverForHire
         /// <summary>Sample the action state once per render/input frame; exposed for deterministic device replay.</summary>
         public void SampleFrame(float deltaSeconds)
         {
+            TrackLastDevice();
             CameraLookDelta = Vector2.zero;
             MenuMove = Vector2.zero;
             MenuSubmitPressed = MenuBackPressed = false;
@@ -151,6 +154,39 @@ namespace HoverForHire
             float yaw = PedalLevel(_yawRight, ref _yawRightHeld, dt) - PedalLevel(_yawLeft, ref _yawLeftHeld, dt)
                 + _yawAxis.ReadValue<float>();
             Command = new PilotCommand(cyclic, Mathf.Clamp(yaw, -1f, 1f), _collective);
+        }
+
+        private void TrackLastDevice()
+        {
+            for (int i = 0; i < _actions.Count; i++)
+            {
+                InputAction action = _actions[i];
+                if (!action.IsInProgress()) continue;
+                InputDevice device = action.activeControl?.device;
+                if (device == null) continue;
+                // Tiny mouse jitter should not flip hints away from a gamepad pilot.
+                if (action == _mouse && action.ReadValue<Vector2>().sqrMagnitude < 4f) continue;
+                LastInputWasGamepad = device is Gamepad;
+                return;
+            }
+        }
+
+        /// <summary>Display string of an action's current binding for keyboard/mouse or gamepad, e.g. "Left Shift" or "RT".</summary>
+        public string BindingLabel(string actionName, bool gamepad)
+        {
+            InputAction action = _asset != null ? _asset.FindAction(actionName) : null;
+            if (action == null) return "";
+            for (int i = 0; i < action.bindings.Count; i++)
+            {
+                InputBinding binding = action.bindings[i];
+                if (binding.isComposite || binding.isPartOfComposite) continue;
+                string path = binding.effectivePath ?? "";
+                bool isGamepad = path.StartsWith("<Gamepad>", StringComparison.Ordinal);
+                bool isDesktop = path.StartsWith("<Keyboard>", StringComparison.Ordinal) || path.StartsWith("<Mouse>", StringComparison.Ordinal);
+                if (gamepad ? isGamepad : isDesktop)
+                    return action.GetBindingDisplayString(i, InputBinding.DisplayStringOptions.DontIncludeInteractions);
+            }
+            return "";
         }
 
         /// <summary>Keys and gamepad buttons are digital (bit state); triggers and axes are analog.</summary>

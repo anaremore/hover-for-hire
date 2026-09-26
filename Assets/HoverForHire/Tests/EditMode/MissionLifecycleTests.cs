@@ -140,6 +140,15 @@ namespace HoverForHire.Tests
             Assert.That(session.State, Is.EqualTo(MissionState.Failed));
             Assert.That(session.PayloadKg, Is.Zero);
             Assert.That(session.TryClaimPayout(out _), Is.False);
+            Dwell(session, At(contract.Destination));
+            Assert.That(session.State, Is.EqualTo(MissionState.Failed), "A failed attempt cannot deliver.");
+            Assert.That(session.Retry("RATE"), Is.True);
+            Dwell(session, At(contract.Destination));
+            Assert.That(session.State, Is.EqualTo(MissionState.Pickup), "The retry must load again before it can deliver.");
+            Dwell(session, At(contract.Pickup));
+            Dwell(session, At(contract.Destination));
+            Assert.That(session.TryClaimPayout(out ChallengeResult result), Is.True, "Only the retried attempt pays.");
+            Assert.That(result.Payout, Is.GreaterThan(0));
         }
 
         [Test]

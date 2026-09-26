@@ -45,13 +45,38 @@ namespace HoverForHire.Tests
         }
 
         [UnityTest]
-        public IEnumerator GroundedChaseIgnoresOwnAircraftCollider()
+        public IEnumerator ChaseSweepIgnoresOwnAircraftButNotOtherSolids()
         {
             CreateRig(out _, out _);
+            // A tail fin placed across the camera's sweep path, not overlapping the sweep's start.
+            _wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _wall.name = "Own tail fin";
+            _wall.layer = WorldConstants.AircraftLayer;
+            _wall.transform.position = Origin + new Vector3(0f, 3.9f, -5f);
+            _wall.transform.localScale = new Vector3(1f, 2f, 4f);
             Physics.SyncTransforms();
             yield return null;
-            Assert.That(_cameraObject.transform.position.z - Origin.z, Is.EqualTo(-12f).Within(0.03f));
+            Assert.That(_cameraObject.transform.position.z - Origin.z, Is.EqualTo(-12f).Within(0.03f), "The aircraft's own fin must not pull the camera in.");
             Assert.That(_cameraObject.transform.position.y, Is.GreaterThan(Origin.y + 1f));
+            // Control: the same solid on an ordinary layer is in the sweep path and does pull the camera in.
+            _wall.layer = 0;
+            _cameraObject.GetComponent<ChaseCamera>().SnapToTarget();
+            yield return null;
+            Assert.That(_cameraObject.transform.position.z - Origin.z, Is.GreaterThan(-5f), "The fin lies across the sweep, so the check above is meaningful.");
+        }
+
+        [UnityTest]
+        public IEnumerator ChaseSweepPassesThroughTreeFoliage()
+        {
+            CreateRig(out _, out _);
+            _wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _wall.name = "Tree crown";
+            _wall.layer = WorldConstants.VegetationLayer;
+            _wall.transform.position = Origin + new Vector3(0f, 3.9f, -6f);
+            _wall.transform.localScale = new Vector3(6f, 4f, 3f);
+            Physics.SyncTransforms();
+            yield return null;
+            Assert.That(_cameraObject.transform.position.z - Origin.z, Is.EqualTo(-12f).Within(0.03f), "Foliage should not make the camera jump.");
         }
 
         [UnityTest]
