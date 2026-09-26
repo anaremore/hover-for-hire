@@ -71,6 +71,7 @@ namespace HoverForHire
             hud.SelectMenuPage(1);yield return null;yield return Capture("06-controls.png");
             hud.SelectMenuPage(2);yield return null;yield return Capture("07-bindings.png");
             hud.SelectMenuPage(3);yield return null;yield return Capture("08-assists-camera.png");
+            hud.SelectMenuPage(4);yield return null;yield return Capture("08a-view-sound.png");
             // Realism: the autorotation drill starts in flight and fails the engine; capture the brief and the warning stack.
             hud.SendMessage("TogglePause");yield return null;
             game.Missions.StartTraining(TrainingSession.Autorotation);

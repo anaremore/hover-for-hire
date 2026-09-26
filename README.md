@@ -102,4 +102,4 @@ The project is a game and practice aid, not a certified aviation simulator. Auto
 
 `Assets/HoverForHire/Scripts/` separates Flight, Input, Cameras, Missions, Training, Persistence, Presentation, World, and Core. Edit `Assets/HoverForHire/Resources/UtilityHelicopter.asset` to tune the aircraft centrally. The world uses metres, mass kilograms, angular rates degrees/s, and physics forces newtons.
 
-Progression lives in Unity's `Application.persistentDataPath` as `progression.json` with a recovery backup. Controls, binding overrides, assists, realism, and volume use local Unity PlayerPrefs. No cloud save is used. Tests isolate their persistence data. The original brief is in [Docs/Brief.md](Docs/Brief.md).
+Progression lives in Unity's `Application.persistentDataPath` as `progression.json` with a recovery backup. Controls, binding overrides, assists, realism, units, and volume use local Unity PlayerPrefs. No cloud save is used. Tests isolate their persistence data. The original brief is in [Docs/Brief.md](Docs/Brief.md).
