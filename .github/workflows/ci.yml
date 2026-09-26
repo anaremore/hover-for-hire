@@ -1,0 +1,118 @@
+name: CI
+
+# EditMode and PlayMode tests, then release builds for Windows, macOS and Linux, with GameCI.
+# Needs Unity license secrets (see Docs/CI.md). Until they are set, the jobs are skipped with a notice.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  license:
+    name: Unity license
+    runs-on: ubuntu-latest
+    outputs:
+      available: ${{ steps.check.outputs.available }}
+    steps:
+      - id: check
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+        run: |
+          if { [ -n "$UNITY_LICENSE" ] || [ -n "$UNITY_SERIAL" ]; } && [ -n "$UNITY_EMAIL" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Unity license secrets are not set, so tests and builds are skipped. See Docs/CI.md."
+          fi
+
+  test:
+    name: Tests (${{ matrix.testMode }})
+    needs: license
+    if: needs.license.outputs.available == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        testMode: [editmode, playmode]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-tests-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-${{ github.sha }}
+          restore-keys: Library-tests-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-
+      - uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto
+          testMode: ${{ matrix.testMode }}
+          artifactsPath: test-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.testMode }}
+          path: test-results
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: [license, test]
+    if: needs.license.outputs.available == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            targetPlatform: StandaloneWindows64
+            buildMethod: HoverForHire.Editor.ProjectSetup.BuildWindows
+          - name: macOS
+            targetPlatform: StandaloneOSX
+            buildMethod: HoverForHire.Editor.ProjectSetup.BuildMac
+          - name: Linux
+            targetPlatform: StandaloneLinux64
+            buildMethod: HoverForHire.Editor.ProjectSetup.BuildLinux
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ matrix.name }}-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-${{ github.sha }}
+          restore-keys: Library-${{ matrix.name }}-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto
+          targetPlatform: ${{ matrix.targetPlatform }}
+          # The project's own build method: release build, version from ProjectSetup.Version, build-info.json.
+          buildMethod: ${{ matrix.buildMethod }}
+          versioning: None
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Hover-for-Hire-${{ matrix.name }}
+          path: |
+            Builds/${{ matrix.name }}
+            !Builds/**/*DoNotShip*/**
+          retention-days: 14
