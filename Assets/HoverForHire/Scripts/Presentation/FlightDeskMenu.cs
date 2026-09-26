@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -18,6 +19,10 @@ namespace HoverForHire
         private readonly FlightHUD hud;
         private int page, focus, count, index, adjust;
         private bool welcome, activate, scrollToFocus, insideScroll;
+        private Vector2Int[] resolutionSizes;
+        private string[] resolutionNames;
+        private Vector2Int resolutionFor;
+        private int resolutionIndex;
         private string versionLabel;
         private Vector2 scroll;
         private Vector2Int direction;
@@ -317,6 +322,7 @@ namespace HoverForHire
             GUILayout.Label("Units · Metric uses km/h, m/s and metres; Aviation uses knots, feet per minute and feet", S.Label);
             int units = Toolbar((int)settings.Units, new[] { "Metric", "Aviation" });
             if (units != (int)settings.Units) hud.SetUnits((UnitSystem)units);
+            GraphicsSection(settings.Graphics);
             InputPreferences s = Input.Settings;
             GUILayout.Label("Camera", S.Label);
             Slider("Camera distance / m", ref s.CameraDistance, 5, 25);
@@ -331,6 +337,54 @@ namespace HoverForHire
             Slider("Recenter speed", ref s.RecenterSpeed, 1, 12);
             GUILayout.Label("Sound", S.Label);
             Slider("Audio volume", ref hud.Audio.Volume, 0, 1);
+        }
+
+        // Every control here is always shown, so a change made during IMGUI's layout pass cannot alter the layout.
+        private void GraphicsSection(GraphicsChoices graphics)
+        {
+            GUILayout.Label("Graphics", S.Label);
+            int preset = Toolbar((int)graphics.Preset, GraphicsQuality.PresetNames);
+            if (preset != (int)graphics.Preset) { graphics.Preset = (GraphicsPreset)preset; hud.ApplyGraphics(); }
+            GUILayout.Label(GraphicsQuality.Describe(graphics.Preset), S.Small);
+            bool vsync = Toggle(graphics.VSync, "VSync  ·  match the display's refresh rate");
+            if (vsync != graphics.VSync) { graphics.VSync = vsync; hud.ApplyGraphics(); }
+            GUILayout.Label(graphics.VSync ? "Frame-rate cap  ·  used when VSync is off" : "Frame-rate cap", S.Small);
+            int cap = Toolbar(Mathf.Max(0, Array.IndexOf(GraphicsQuality.FrameCaps, graphics.FrameCap)), GraphicsQuality.FrameCapNames);
+            if (GraphicsQuality.FrameCaps[cap] != graphics.FrameCap) { graphics.FrameCap = GraphicsQuality.FrameCaps[cap]; hud.ApplyGraphics(); }
+
+            GUILayout.Label("Display", S.Label);
+            FullScreenMode[] modes = Application.platform == RuntimePlatform.WindowsPlayer ? WindowsModes : OtherModes;
+            int current = Mathf.Max(0, Array.IndexOf(modes, Screen.fullScreenMode));
+            int mode = Toolbar(current, modes == WindowsModes ? WindowsModeNames : OtherModeNames);
+            if (mode != current) Screen.fullScreenMode = modes[mode];
+            RefreshResolutions();
+            int at = Cycler("Resolution", resolutionIndex, resolutionNames);
+            if (at != resolutionIndex) Screen.SetResolution(resolutionSizes[at].x, resolutionSizes[at].y, Screen.fullScreenMode);
+        }
+
+        private static readonly FullScreenMode[] WindowsModes = { FullScreenMode.FullScreenWindow, FullScreenMode.ExclusiveFullScreen, FullScreenMode.Windowed };
+        private static readonly string[] WindowsModeNames = { "Borderless", "Fullscreen", "Windowed" };
+        private static readonly FullScreenMode[] OtherModes = { FullScreenMode.FullScreenWindow, FullScreenMode.Windowed };
+        private static readonly string[] OtherModeNames = { "Fullscreen", "Windowed" };
+
+        /// <summary>The display's sizes, smallest first; the current size is listed too when it is not one of them.</summary>
+        private void RefreshResolutions()
+        {
+            var size = new Vector2Int(Screen.width, Screen.height);
+            if (resolutionNames != null && size == resolutionFor) return;
+            resolutionFor = size;
+            var sizes = new List<Vector2Int>();
+            foreach (Resolution r in Screen.resolutions)
+            {
+                var s = new Vector2Int(r.width, r.height);
+                if (!sizes.Contains(s)) sizes.Add(s);
+            }
+            if (!sizes.Contains(size)) sizes.Add(size);
+            sizes.Sort((a, b) => (a.x * a.y).CompareTo(b.x * b.y));
+            resolutionSizes = sizes.ToArray();
+            resolutionNames = new string[resolutionSizes.Length];
+            for (int i = 0; i < resolutionSizes.Length; i++) resolutionNames[i] = resolutionSizes[i].x + " × " + resolutionSizes[i].y;
+            resolutionIndex = sizes.IndexOf(size);
         }
 
         private void WelcomePage()
@@ -415,6 +469,20 @@ namespace HoverForHire
             if (Activated(id)) { activate = false; step = 1; }
             if (step != 0) result = (result + step + options.Length) % options.Length;
             return result;
+        }
+
+        /// <summary>A choice from a long list: select to step forward; left / right step either way.</summary>
+        private int Cycler(string caption, int selected, string[] options)
+        {
+            int id = index++;
+            Color color = Highlight(id);
+            bool clicked = GUILayout.Button(caption + "   ‹  " + options[selected] + "  ›", S.Button);
+            GUI.backgroundColor = color;
+            Track(id);
+            int step = Adjustment(id);
+            if (Activated(id)) { activate = false; step = 1; }
+            else if (clicked) step = 1;
+            return (selected + step + options.Length) % options.Length;
         }
 
         private void Slider(string caption, ref float number, float min, float max, string format = "F2")

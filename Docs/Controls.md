@@ -8,9 +8,25 @@ The Flight Desk has six tabs:
 * **Controls.**
 * **Bindings.**
 * **Assists / realism.**
-* **View / sound:** units, camera and volume.
+* **View / sound:** units, graphics, display, camera and volume.
 
 **Units** are *Metric* (km/h, m/s, metres) or *Aviation* (knots, feet per minute, feet, nautical miles). They apply to every HUD readout.
+
+**Graphics** presets trade looks for speed:
+
+| Preset | Shadows | Antialiasing | Render resolution | Trees drawn to |
+| --- | --- | --- | --- | --- |
+| Low | 150 m, 2 cascades | off | 80% | 900 m |
+| Medium | 250 m, 2 cascades | 2x MSAA | 100% | 1400 m |
+| High (default) | 400 m, 4 cascades | 4x MSAA | 100% | every tree |
+| Ultra | 550 m, 4 cascades | 8x MSAA | 100% | every tree |
+
+The rest of the page:
+* **VSync** (on by default) matches the display's refresh rate. With VSync off, the frame-rate cap applies.
+* **Window mode:** Borderless, Fullscreen (exclusive, Windows only) or Windowed.
+* **Resolution** cycles through the display's sizes.
+
+Unity remembers the window mode and resolution between launches. To override the saved preset for one run, add `-hover-graphics Low` (or `Medium`, `High`, `Ultra`) to the command line.
 
 Pause menus support the gamepad without a mouse: D-pad or left stick up/down moves the highlighted control; left/right changes a tab, option, or slider; South selects; East resumes. Holding a direction repeats after a short delay. Long lists scroll the focused control into view. MenuMove, MenuSubmit, and MenuBack are also rebindable.
 

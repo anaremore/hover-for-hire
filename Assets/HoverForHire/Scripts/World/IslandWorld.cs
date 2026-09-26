@@ -81,6 +81,7 @@ namespace HoverForHire
                 pivot.AddComponent<WindsockAnimator>();
             }
             EnvironmentScenery.Build(root, sites);
+            EnvironmentGeometry.ReleasePools();
             return zones;
         }
         static bool NearPad(Vector3 p, float r)

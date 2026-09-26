@@ -40,6 +40,7 @@ namespace HoverForHire
             Missions.PlayerRealism = Settings.Realism;
             Missions.Units = Settings.Units;
             Audio.Volume = Settings.Volume;
+            ApplyGraphics();
             firstRun = !Settings.FirstRunComplete;
             Model = new HudModel(this);
             instruments = new FlightInstrumentsView(this);
@@ -121,6 +122,10 @@ namespace HoverForHire
             menu.CloseWelcome();
             if (remember) { Settings.FirstRunComplete = true; Save(); }
         }
+
+        /// <summary>Apply the graphics preset, VSync and frame-rate cap from the pilot's settings.</summary>
+        public void ApplyGraphics()
+            => GraphicsQuality.Apply(Settings.Graphics, Game.CameraRig != null ? Game.CameraRig.GetComponent<Camera>() : null);
 
         public void Save()
         {
@@ -263,6 +268,7 @@ namespace HoverForHire
             instruments?.Dispose();
             Styles.Dispose();
             FlightHudGraphics.ReleaseRings();
+            GraphicsQuality.Release();
         }
     }
 }

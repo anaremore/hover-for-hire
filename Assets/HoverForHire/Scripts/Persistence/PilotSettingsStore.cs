@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace HoverForHire
 {
-    /// <summary>Player choices outside the input system: assists, realism, units, volume and first-launch state.</summary>
+    /// <summary>Player choices outside the input system: assists, realism, units, graphics, volume and first-launch state.</summary>
     [Serializable]
     public sealed class PilotSettings
     {
@@ -11,6 +11,7 @@ namespace HoverForHire
         public AssistSettings Assists = new AssistSettings();
         public RealismSettings Realism = new RealismSettings();
         public UnitSystem Units = UnitSystem.Metric;
+        public GraphicsChoices Graphics = new GraphicsChoices();
         [Range(0f, 1f)] public float Volume = 0.65f;
         public bool FirstRunComplete;
 
@@ -19,6 +20,8 @@ namespace HoverForHire
             if (Assists == null) Assists = new AssistSettings();
             if (Realism == null) Realism = new RealismSettings();
             Realism.Sanitize();
+            if (Graphics == null) Graphics = new GraphicsChoices();
+            Graphics.Sanitize();
             if (!Enum.IsDefined(typeof(UnitSystem), Units)) Units = UnitSystem.Metric;
             Volume = float.IsNaN(Volume) ? 0.65f : Mathf.Clamp01(Volume);
             Version = PilotSettingsStore.CurrentVersion;

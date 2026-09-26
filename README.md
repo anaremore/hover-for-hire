@@ -36,6 +36,7 @@ If setup assets ever need regeneration, use **Hover for Hire → Prepare project
 - Fine-then-coarse digital collective and pedal ramps, a hover-power tick on the collective gauge, a *Sim pedals* gamepad layout with analog trigger pedals, and a 50 Hz flight data recorder for playtest analysis.
 - Rebindable keyboard/mouse, gamepad, and absolute collective binding. Persistent collective, two mouse cyclic modes, free look hold/return options, saved bindings and preferences.
 - Chase and cockpit cameras with free look, smoothing, collision handling, and recentering.
+- Graphics presets from Low to Ultra (shadows, antialiasing, render resolution, tree distance), VSync, a frame-rate cap, window mode and resolution, all in the Flight Desk.
 - Free Flight, twelve training drills (the basics, then crosswind, heavy lift, settling with power, autorotation and confined-area landings), passenger and internal cargo deliveries, stable loading/unloading, comfort/condition/landing/time scores against par, an offer board of up to three jobs, skill certifications earned in training that open rooftop, mountain, coastal and emergency work, a logbook of flight time, landings, personal bests and certifications, liveries bought with earnings (paint only), and duplicate payout prevention.
 - Ten pads across a detailed coastal town, airport, ferry harbor, industrial yard, rooftop clinic, orchard, hills and remote sites; mixed forests, marked roads, boats and shoreline scenery.
 - Original modeled utility helicopter with a low, narrow instrument panel and chin windows. Five live dials: airspeed, radar altitude, vertical speed, torque and rotor speed. Smooth painted/alloy/glass materials, textured terrain, animated water, cloud sky, soft shadows and film grading.
@@ -118,6 +119,8 @@ On macOS/Linux use the Unity executable with equivalent arguments:
 "$UNITY_EDITOR" -batchmode -nographics -projectPath "$PWD" -runTests -testPlatform EditMode -testResults "$PWD/Artifacts/editmode.xml" -logFile "$PWD/Artifacts/editmode.log"
 "$UNITY_EDITOR" -batchmode -projectPath "$PWD" -executeMethod HoverForHire.Editor.ProjectSetup.BuildLinux -quit -logFile "$PWD/Artifacts/build-linux.log"
 ```
+
+Continuous integration (GameCI: tests, then Windows, macOS and Linux builds) is in `.github/workflows/ci.yml`; it needs Unity license secrets, described in [Docs/CI.md](Docs/CI.md). Signing and notarizing the macOS player is covered in [Docs/macOS.md](Docs/macOS.md).
 
 The new [Unity CLI](https://unity.com/blog/meet-the-unity-cli) can also orchestrate editor builds/tests. This project uses the editor's batch interface so no experimental runtime pipeline package is required. Dependencies were checked against Unity's [6.3 URP](https://docs.unity3d.com/6000.3/Documentation/Manual/com.unity.render-pipelines.universal.html) and [Input System compatibility](https://docs.unity3d.com/6000.3/Documentation/Manual/com.unity.inputsystem.html) documentation, then resolved by the LTS editor: URP 17.3.0, Input System 1.20.0, Test Framework 1.6.0. `Packages/packages-lock.json` pins the resolved graph.
 

@@ -3,6 +3,8 @@ param(
     [int]$Height = 1080,
     [string]$Label = 'benchmark',
     [string]$Without = '',
+    [ValidateSet('', 'Low', 'Medium', 'High', 'Ultra')]
+    [string]$Graphics = '',
     [switch]$Development,
     [string]$Player = ''
 )
@@ -10,6 +12,7 @@ param(
 # -Development uses the development player instead, which also reports managed garbage per frame.
 # Writes Artifacts/<Label>/benchmark.json and benchmark.txt, and Artifacts/<Label>.log.
 # -Without hud,shadows,vegetation,postfx,msaa removes those parts first, to measure what each one costs.
+# -Graphics Low|Medium|High|Ultra measures that preset instead of the saved one.
 # Close other GPU-heavy applications first; do not run it alongside a smoke run.
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
@@ -22,6 +25,7 @@ $log = Join-Path $projectRoot "Artifacts\$Label.log"
 $arguments = @('-hover-benchmark', ('"' + $output + '"'), '-screen-fullscreen', '0',
     '-screen-width', $Width, '-screen-height', $Height, '-logFile', ('"' + $log + '"'))
 if ($Without) { $arguments += @('-hover-bench-without', $Without) }
+if ($Graphics) { $arguments += @('-hover-graphics', $Graphics) }
 $process = Start-Process -FilePath $Player -ArgumentList $arguments -PassThru
 if (-not $process.WaitForExit(300000)) { $process.Kill(); throw "Benchmark timed out; see $log" }
 $table = Join-Path $output 'benchmark.txt'

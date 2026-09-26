@@ -53,6 +53,33 @@ The immediate-mode (IMGUI) flight HUD was two-thirds of the main thread's work, 
 
 The HUD now costs 0.7 ms in chase view and 0.5 ms in the cockpit, down from 1.9 and 1.35 ms. The remaining 6 KB/frame of garbage comes from Unity 6's IMGUI text drawing itself, about 70 bytes per label. Skipping HUD text in a test run removed it; turning off rich text did not. It now means one incremental collection every second or two at 60 fps.
 
+**Graphics options.** The Flight Desk's View page now has graphics and display settings:
+- **Presets:** Low, Medium, High (the default) and Ultra, covering shadow distance and cascades, MSAA, render resolution and how far trees are drawn.
+- **Frame pacing:** VSync (on by default) and a frame-rate cap.
+- **Display:** window mode and resolution.
+
+Presets change a runtime copy of the pipeline asset, never the project asset, and trees are culled by layer distance. `GraphicsQualityTests` checks both, and `-hover-graphics` overrides the saved preset for one run. Measured in the release player:
+
+| Preset | GPU, town view | GPU, low pass | Main thread, town view |
+| --- | --- | --- | --- |
+| Low | 0.67 ms | 0.64 ms | 1.42 ms |
+| Medium | 1.20 ms | 1.04 ms | 1.72 ms |
+| High | 1.62 ms | 1.31 ms | 1.84 ms |
+| Ultra | 1.83 ms | 1.50 ms | 1.62 ms |
+
+Low roughly halves the GPU time of High. CPU times vary by about ±0.2 ms between runs, more than the difference between presets. The benchmark now waits 3 s after startup: the preset replaces the pipeline, and the first frames compile shaders.
+
+**Startup.** The world's merged-mesh lists are now reused from one batch to the next instead of regrown for each of about 150 batches, and quads no longer allocate arrays. Rendered-only meshes drop their CPU copy once uploaded.
+
+| Measure (development player) | Before | After |
+| --- | --- | --- |
+| World build | 2.1 s | 1.6 s |
+| Garbage collections during it | 1,875 | 95 |
+| Startup | 4.3 s | 3.8 s |
+| Managed heap reserved | 19 MB | 65 MB |
+
+The heap is larger because the pooled lists peak together, and Unity's collector does not return heap space.
+
 **Release and development builds.**
 - **Release by default.** Builds are release builds.
 - **Development variant.** `Tools/Unity.ps1 WindowsDev` builds `Builds/Windows-Development`, which `Tools/Smoke.ps1` runs.

@@ -87,6 +87,9 @@ namespace HoverForHire
                 Application.Quit(1);
                 yield break;
             }
+            // The pilot's VSync and frame cap were applied during startup; this run is uncapped.
+            Application.targetFrameRate = -1;
+            QualitySettings.vSyncCount = 0;
             // Unattended and uncapped: no focus pause, no welcome page, and no saved first-launch state.
             game.Input.PauseOnFocusLoss = false;
             var hud = game.GetComponent<FlightHUD>();
@@ -102,6 +105,8 @@ namespace HoverForHire
                 hudRecorders.Add(ProfilerRecorder.StartNew(ProfilerCategory.Scripts, marker));
             hudTotals = new double[hudRecorders.Count];
 
+            // Startup ends with shader and pipeline work (the graphics preset replaces the pipeline); let it finish.
+            yield return new WaitForSecondsRealtime(3f);
             Vector3 home = game.Zones[0].transform.position;
             yield return View("Home pad, chase view", home + Vector3.up * 1.55f, 45f, false);
             Vector3 town = new Vector3(-330, 0, -330);
@@ -120,8 +125,9 @@ namespace HoverForHire
             report.Processor = SystemInfo.processorType;
             report.Resolution = Screen.width + "x" + Screen.height;
             var pipeline = QualitySettings.renderPipeline as UniversalRenderPipelineAsset;
+            report.Preset = GameBootstrap.Instance != null && hud.Settings != null ? GraphicsQuality.Effective(hud.Settings.Graphics).ToString() : "";
             if (pipeline != null)
-                report.Rendering = $"shadows {pipeline.shadowDistance:0} m x{pipeline.shadowCascadeCount}, MSAA {pipeline.msaaSampleCount}x, scale {pipeline.renderScale:0.##}";
+                report.Rendering = $"{report.Preset} preset: shadows {pipeline.shadowDistance:0} m x{pipeline.shadowCascadeCount}, MSAA {pipeline.msaaSampleCount}x, scale {pipeline.renderScale:0.##}";
             report.FrameTimingAvailable = FrameTimingManager.IsFeatureEnabled();
             report.StartupSeconds = startupSeconds;
             report.WorldBuildSeconds = worldBuildSeconds;
@@ -320,7 +326,7 @@ namespace HoverForHire
         [Serializable]
         class Report
         {
-            public string Version, Device, Processor, Resolution, Rendering, Without;
+            public string Version, Device, Processor, Resolution, Rendering, Preset, Without;
             public bool DevelopmentBuild, FrameTimingAvailable;
             public float StartupSeconds, WorldBuildSeconds, ManagedHeapMB, TotalAllocatedMB;
             public int WorldBuildCollections;

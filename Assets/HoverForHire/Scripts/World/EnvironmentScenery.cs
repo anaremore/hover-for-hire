@@ -618,7 +618,8 @@ namespace HoverForHire
                                 Shrub(b, p + new Vector3(-3, 0, 3), 1.3f, random);
                         }
                     }
-                    b.Finish();
+                    // On the vegetation layer, so graphics presets can stop drawing distant cells.
+                    b.Finish(true, VegetationLayer);
                 }
             var foreground = new EnvironmentGeometry("Airfield / coastal tree line", root);
             for (int i = 0; i < 20; i++)

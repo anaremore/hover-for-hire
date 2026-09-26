@@ -112,5 +112,28 @@ namespace HoverForHire.Tests
             Assert.That(sanitized.Volume, Is.EqualTo(1f));
             Assert.That(sanitized.Realism.Gustiness, Is.Zero);
         }
+
+        [Test]
+        public void GraphicsChoicesRoundTripAndOlderSettingsGetDefaults()
+        {
+            var storage = new MemoryStorage();
+            var settings = new PilotSettings { Graphics = { Preset = GraphicsPreset.Low, VSync = false, FrameCap = 144 } };
+            PilotSettingsStore.Save(storage, settings);
+            PilotSettings loaded = PilotSettingsStore.Load(storage);
+            Assert.That(loaded.Graphics.Preset, Is.EqualTo(GraphicsPreset.Low));
+            Assert.That(loaded.Graphics.VSync, Is.False);
+            Assert.That(loaded.Graphics.FrameCap, Is.EqualTo(144));
+
+            // Settings saved before graphics options existed load with the defaults: High, VSync on.
+            storage.Strings[PilotSettingsStore.Key] = "{\"Version\": 1, \"Units\": 1}";
+            PilotSettings older = PilotSettingsStore.Load(storage);
+            Assert.That(older.Graphics.Preset, Is.EqualTo(GraphicsPreset.High));
+            Assert.That(older.Graphics.VSync, Is.True);
+
+            storage.Strings[PilotSettingsStore.Key] = "{\"Graphics\": {\"Preset\": 9, \"FrameCap\": 3}}";
+            PilotSettings sanitized = PilotSettingsStore.Load(storage);
+            Assert.That(sanitized.Graphics.Preset, Is.EqualTo(GraphicsPreset.High));
+            Assert.That(sanitized.Graphics.FrameCap, Is.EqualTo(15), "Caps below 15 fps are raised; 0 stays uncapped.");
+        }
     }
 }

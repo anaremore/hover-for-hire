@@ -46,6 +46,9 @@ namespace HoverForHire
                 Application.Quit(1);
                 yield break;
             }
+            // The pilot's graphics settings were applied during startup; this run's frame cap replaces them.
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = frameLimit;
             // Unattended: another window taking focus must not pause the run and stall its game-time deadlines.
             game.Input.PauseOnFocusLoss = false;
             game.GetComponent<FlightHUD>().SendMessage("SetPause", false);

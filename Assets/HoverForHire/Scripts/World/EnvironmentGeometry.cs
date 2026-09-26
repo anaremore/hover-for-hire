@@ -15,12 +15,33 @@ namespace HoverForHire
             public readonly List<Vector3> Normals = new List<Vector3>();
             public readonly List<Vector2> UV = new List<Vector2>();
             public readonly List<int> Triangles = new List<int>();
+            public void Clear() { Vertices.Clear(); Normals.Clear(); UV.Clear(); Triangles.Clear(); }
         }
 
         sealed class CollisionSurface
         {
             public readonly List<Vector3> Vertices = new List<Vector3>();
             public readonly List<int> Triangles = new List<int>();
+            public void Clear() { Vertices.Clear(); Triangles.Clear(); }
+        }
+
+        // A batch's lists grow to tens of thousands of entries. Reusing them for the next batch, instead of growing new
+        // ones from empty for each of the ~150 batches, keeps startup from churning through hundreds of megabytes.
+        static readonly Stack<Surface> SurfacePool = new Stack<Surface>();
+        static readonly Stack<CollisionSurface> CollisionPool = new Stack<CollisionSurface>();
+
+        /// <summary>Let the pooled lists go once the world is built.</summary>
+        public static void ReleasePools()
+        {
+            SurfacePool.Clear();
+            CollisionPool.Clear();
+        }
+
+        Surface SurfaceFor(Material material)
+        {
+            if (!surfaces.TryGetValue(material, out var data))
+                surfaces.Add(material, data = SurfacePool.Count > 0 ? SurfacePool.Pop() : new Surface());
+            return data;
         }
 
         // Template mesh data is read once; Mesh.vertices and friends allocate a new copy on every access.
@@ -68,7 +89,7 @@ namespace HoverForHire
         void AddCollision(Mesh mesh, Vector3 position, Vector3 size, Quaternion rotation, int layer)
         {
             if (!collision.TryGetValue(layer, out var data))
-                collision.Add(layer, data = new CollisionSurface());
+                collision.Add(layer, data = CollisionPool.Count > 0 ? CollisionPool.Pop() : new CollisionSurface());
             Matrix4x4 transform = Matrix4x4.TRS(position, rotation, size);
             Template template = Read(mesh);
             int start = data.Vertices.Count;
@@ -97,8 +118,7 @@ namespace HoverForHire
 
         public void Add(Mesh mesh, Vector3 position, Vector3 size, Quaternion rotation, Material material)
         {
-            if (!surfaces.TryGetValue(material, out var data))
-                surfaces.Add(material, data = new Surface());
+            Surface data = SurfaceFor(material);
             Matrix4x4 transform = Matrix4x4.TRS(position, rotation, size);
             Matrix4x4 normalTransform = transform.inverse.transpose;
             Template template = Read(mesh);
@@ -119,18 +139,29 @@ namespace HoverForHire
 
         public void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Material material, float uvWidth = 1, float uvLength = 1)
         {
-            if (!surfaces.TryGetValue(material, out var data))
-                surfaces.Add(material, data = new Surface());
+            Surface data = SurfaceFor(material);
             int start = data.Vertices.Count;
             Vector3 normal = Vector3.Cross(b - a, c - a).normalized;
-            data.Vertices.AddRange(new[] { a, b, c, d });
+            data.Vertices.Add(a);
+            data.Vertices.Add(b);
+            data.Vertices.Add(c);
+            data.Vertices.Add(d);
             for (int i = 0; i < 4; i++)
                 data.Normals.Add(normal);
-            data.UV.AddRange(new[] { new Vector2(0, 0), new Vector2(0, uvLength), new Vector2(uvWidth, uvLength), new Vector2(uvWidth, 0) });
-            data.Triangles.AddRange(new[] { start, start + 1, start + 2, start, start + 2, start + 3 });
+            data.UV.Add(new Vector2(0, 0));
+            data.UV.Add(new Vector2(0, uvLength));
+            data.UV.Add(new Vector2(uvWidth, uvLength));
+            data.UV.Add(new Vector2(uvWidth, 0));
+            data.Triangles.Add(start);
+            data.Triangles.Add(start + 1);
+            data.Triangles.Add(start + 2);
+            data.Triangles.Add(start);
+            data.Triangles.Add(start + 2);
+            data.Triangles.Add(start + 3);
         }
 
-        public void Finish(bool shadows = true)
+        /// <summary>Build the merged meshes. Renderers go on <paramref name="renderLayer"/> (vegetation: for distance culling).</summary>
+        public void Finish(bool shadows = true, int renderLayer = 0)
         {
             var group = new GameObject(name).transform;
             group.SetParent(parent, false);
@@ -146,7 +177,9 @@ namespace HoverForHire
                 mesh.SetUVs(0, data.UV);
                 mesh.SetTriangles(data.Triangles, 0);
                 mesh.RecalculateBounds();
-                var go = new GameObject(entry.Key.name, typeof(MeshFilter), typeof(MeshRenderer));
+                // Rendered only: the CPU copy is not needed once the GPU has it.
+                mesh.UploadMeshData(true);
+                var go = new GameObject(entry.Key.name, typeof(MeshFilter), typeof(MeshRenderer)) { layer = renderLayer };
                 go.transform.SetParent(group, false);
                 go.GetComponent<MeshFilter>().sharedMesh = mesh;
                 var renderer = go.GetComponent<MeshRenderer>();
@@ -168,17 +201,18 @@ namespace HoverForHire
                 go.AddComponent<MeshCollider>().sharedMesh = mesh;
                 lifetime.Meshes.Add(mesh);
             }
-        }
-
-        public int CollisionTriangleCount
-        {
-            get
+            foreach (var data in surfaces.Values)
             {
-                int count = 0;
-                foreach (var entry in collision)
-                    count += entry.Value.Triangles.Count / 3;
-                return count;
+                data.Clear();
+                SurfacePool.Push(data);
             }
+            surfaces.Clear();
+            foreach (var data in collision.Values)
+            {
+                data.Clear();
+                CollisionPool.Push(data);
+            }
+            collision.Clear();
         }
 
         static Mesh Cube
