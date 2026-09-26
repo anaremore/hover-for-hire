@@ -169,6 +169,26 @@ namespace HoverForHire.Tests
         }
 
         [Test]
+        public void PadCuesShowWhoIsWaitingAndWhereToGoThenBoardOnLoading()
+        {
+            var cues = Track(new GameObject("Pad cues")).AddComponent<PadCues>();
+            cues.Missions = director;
+            cues.Aircraft = aircraft;
+            cues.Refresh(0.1f);
+            Assert.That(cues.WaitingCount, Is.EqualTo(2), "160 kg of passengers wait beside the offered pickup.");
+            Assert.That(cues.BeaconZone, Is.EqualTo(pads[0]), "The beacon marks the pickup.");
+            director.AcceptNextJob();
+            Step(220);
+            Assert.That(director.MissionState, Is.EqualTo(MissionState.Transport));
+            for (int i = 0; i < 30; i++) cues.Refresh(0.1f);
+            Assert.That(cues.WaitingCount, Is.Zero, "Everyone boarded once loading completed.");
+            Assert.That(cues.BeaconZone, Is.EqualTo(pads[1]), "The beacon moves to the destination.");
+            Assert.That(cues.BeaconVisible, Is.True);
+            Assert.That(cues.GetComponentsInChildren<Collider>(true), Is.Empty, "Cosmetic cues never collide.");
+            Assert.That(aircraft.Crashed, Is.False);
+        }
+
+        [Test]
         public void ExternalResetFailsLoadedJobAndRetryRequiresNewPickup()
         {
             director.AcceptNextJob();

@@ -44,7 +44,12 @@ A service dwell requires all of the following continuously:
 - Ground speed ≤0.8 m/s, absolute vertical speed ≤0.5 m/s and tilt ≤8°.
 - Three seconds without a failed condition. Advanced jobs tighten ground speed to 0.5 m/s, tilt to 6° and dwell to four seconds.
 
-Near a pad the HUD's hover display replaces the chart. It shows ground drift and its trend, the pad's position and a ring at the drift limit. The ring turns green when ground speed, vertical speed and tilt are all within the service limits. In a shift, a job clock shows elapsed time against the job's target time.
+The pads carry cues in the world too. Passengers or cargo crates wait beside the offered pickup (one figure per 80 kg of passengers, one crate per 90 kg of cargo) and board or load once the dwell completes. The pad the pilot is flying to shows:
+* a double-flash strobe beacon;
+* orange marker smoke that drifts with the wind;
+* amber edge lights.
+
+The cues have no colliders and stand beyond the rotor's reach. Near a pad the HUD's hover display replaces the chart. It shows ground drift and its trend, the pad's position and a ring at the drift limit. The ring turns green when ground speed, vertical speed and tilt are all within the service limits. In a shift, a job clock shows elapsed time against the job's target time.
 
 Any failed condition resets the dwell. Flyovers and brief collisions cannot load or deliver. Pickup applies payload mass; delivery, failure, mode change and reset clear it. A retry starts a fresh attempt at the pickup, requiring loading again. A completed attempt can be claimed only once, and retry cannot reopen it.
 

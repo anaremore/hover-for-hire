@@ -54,6 +54,7 @@ If setup assets ever need regeneration, use **Hover for Hire → Prepare project
   - gearbox, airflow, skid scrape and a low-rotor-RPM horn.
 
   It is positional outside and muffled in the cockpit.
+- Pads that show the job: passengers or crates wait at the pickup and board when loading completes; the target pad flashes a strobe beacon, drifts orange smoke with the wind and lights its edge.
 - Surface-aware landing rotor wash, dust, sparks, smoke, water spray, graded crash debris, high-energy explosions and camera shake. Reset restores aircraft parts and clears effects.
 
 ## Controls

@@ -67,6 +67,9 @@ namespace HoverForHire
             audio.CameraRig = CameraRig;
             var effects = go.AddComponent<AircraftEffects>();
             effects.Initialize(Aircraft, audio);
+            var cues = gameObject.AddComponent<PadCues>();
+            cues.Missions = Missions;
+            cues.Aircraft = Aircraft;
             var hud = gameObject.AddComponent<FlightHUD>();
             hud.Game = this;
             hud.Audio = audio;
