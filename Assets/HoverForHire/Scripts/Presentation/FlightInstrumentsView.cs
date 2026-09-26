@@ -16,7 +16,7 @@ namespace HoverForHire
         private static readonly Color Faint = new Color(.8f, .94f, .7f, .22f);
 
         private readonly FlightHUD hud;
-        private readonly GUIContent objectiveMeasure = new GUIContent();
+        private readonly GUIContent objectiveMeasure = new GUIContent(), statusMeasure = new GUIContent();
         private Texture2D mapTexture;
 
         public FlightInstrumentsView(FlightHUD hud) { this.hud = hud; }
@@ -65,14 +65,16 @@ namespace HoverForHire
         {
             // The panel grows with the wrapped objective, so long drill briefs never run into the status line.
             objectiveMeasure.text = M.Objective;
+            statusMeasure.text = M.Status;
             float objective = Mathf.Max(24, S.Label.CalcHeight(objectiveMeasure, 316));
             bool status = M.Status.Length > 0;
-            float height = 39 + objective + (status ? 45 : 10);
+            float statusHeight = status ? Mathf.Max(20, S.Small.CalcHeight(statusMeasure, 316)) : 0;
+            float height = 39 + objective + (status ? statusHeight + 8 : 10);
             S.Box(new Rect(26, 26, 348, height), .61f);
             FlightHudGraphics.Fill(new Rect(26, 26, 3, height), FlightHudGraphics.Amber);
             S.Text(new Rect(42, 36, 316, 20), M.ModeHeader, S.HudSmall, FlightHudGraphics.Amber);
             GUI.Label(new Rect(42, 62, 316, objective), M.Objective, S.Label);
-            if (status) GUI.Label(new Rect(42, 64 + objective, 316, 37), M.Status, S.Small);
+            if (status) GUI.Label(new Rect(42, 64 + objective, 316, statusHeight), M.Status, S.Small);
         }
 
         private void DrawCompass()

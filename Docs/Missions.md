@@ -4,11 +4,31 @@ The vertical slice uses the same Rigidbody aircraft in every mode. `MissionSessi
 
 ## Delivery shifts
 
-A shift lasts 15 minutes of game time; pausing stops the timer. The first two offers are **Town connection** (160 kg of passengers, home base to town) and **Ferry provisions** (230 kg of internal cargo, town to the ferry dock). Both are immediately available. After two successful deliveries, workshop, clinic and orchard offers unlock. After four, ridge, summit, lighthouse and east cove offers unlock. The original helicopter remains unchanged.
+A shift lasts 15 minutes of game time; pausing stops the timer. The original helicopter never changes. Harder work opens up through two routes:
+* **Deliveries.** Workshop, clinic and orchard jobs open after two deliveries. Ridge, summit, lighthouse, east cove and medevac jobs open after four.
+* **Certifications,** earned in training:
 
-From Free Flight, the Interact key starts a shift: immediately when the aircraft is on the home pad, otherwise after a second press within four seconds (the shift begins at home base). `BrowseNextJob()` cycles unlocked offers before acceptance, so the pilot can continue taking the generous beginner routes. `AcceptNextJob()` accepts the displayed offer; after a delivered job it selects and accepts the next offer. Loading and unloading are automatic when the service conditions are met. `Interact()` accepts an offer or retries a failed job; it never bypasses service conditions.
+| Certification | Earned by | Opens |
+| --- | --- | --- |
+| Rooftop | Precision landing drill | Clinic staff transfer (rooftop clinic) |
+| Mountain | Confined area and Heavy lift drills | Ridge survey crew, Summit supplies |
+| Coastal | Crosswind landing drill | Lighthouse relief; with Rooftop, East cove samples |
+| Emergency | Settling with power and Autorotation drills | With Mountain and Rooftop, Summit medical evacuation (the best-paid job) |
 
-Each contract supplies pickup and destination, passenger/cargo type, payload mass, base pay, expected duration, deadline and service limits. Early contracts allow three times their expected duration before failure. Later contracts allow twice the expected duration. Expected duration includes generous takeoff and landing time plus route distance; it is a score target, not a countdown to failure. Retries keep the shift clock running.
+**Town connection** (160 kg of passengers, home base to town) and **Ferry provisions** (230 kg of cargo, town to the ferry dock) are open from the first shift.
+
+**The offer board.** Between jobs, an offer board deals up to three distinct available jobs. The first starts at the pad the aircraft is on, whenever one does, so a new job never begins with an empty repositioning flight. The deal is seeded by progress, so the same record always sees the same offers.
+* **In flight:** the mission panel lists the offers, and the HUD marker points at the selected job's pickup. Interact accepts the selected offer.
+* **Flight Desk:** the Fly page shows each offer's route, load, distance, par, time limit, pay and the wind at the destination. The player can accept any of them there.
+* **Locked jobs:** a hint names jobs still locked behind a certification and the drill that earns it.
+
+From Free Flight, the Interact key starts a shift: immediately when the aircraft is on the home pad, otherwise after a second press within four seconds (the shift begins at home base). Loading and unloading are automatic when the service conditions are met. `Interact()` accepts an offer or retries a failed job; it never bypasses service conditions.
+
+**Par and time limits.** Each contract supplies pickup and destination, passenger/cargo type, payload mass, base pay, par, time limit and service limits.
+* **Par** is a minute for takeoff, loading and landing plus the route flown at 25 m/s. It is calibrated against the diagnostic autopilot, which flies home to Town Green in about 71 s against a par of 1:15.
+* **Time limit:** early contracts allow three times par before failing; later ones allow twice par.
+* **In flight,** the HUD shows the job clock against par: amber after par, red near the limit.
+* Retries keep the shift clock running.
 
 The explicit lifecycle is:
 

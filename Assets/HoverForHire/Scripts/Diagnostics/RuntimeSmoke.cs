@@ -139,6 +139,16 @@ namespace HoverForHire
             yield return new WaitForSeconds(2f);
             yield return Capture("08d-crosswind-aviation.png");
             hud.SetUnits(units);
+            // Delivery shift: the offer board in the mission panel and in the Flight Desk.
+            game.Missions.StartShift();
+            Command = PilotCommand.Neutral;
+            yield return new WaitForSeconds(1f);
+            yield return Capture("08e-shift-offers.png");
+            hud.TogglePause();
+            hud.SelectMenuPage(0);
+            yield return null;
+            yield return Capture("08f-offer-board.png");
+            hud.TogglePause();
             game.Missions.StartFreeFlight();
             Command = PilotCommand.Neutral;
             yield return new WaitForSeconds(1.5f);

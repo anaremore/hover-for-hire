@@ -46,15 +46,21 @@ namespace HoverForHire
         public string TrainingFeedback => CurrentTraining?.Feedback ?? "";
         public float TrainingProgress => CurrentTraining?.Progress ?? 0f;
         public IReadOnlyList<ContractDefinition> Contracts => contracts;
+        /// <summary>Up to three jobs to choose from between deliveries; the first starts where the aircraft is, when possible.</summary>
+        public IReadOnlyList<ContractDefinition> Offers => offers;
+        public int SelectedOffer { get; private set; }
+        /// <summary>Certifications earned from completed drills.</summary>
+        public Certification EarnedCertifications => Certifications.Earned(Progression?.CompletedTrainingMask ?? 0);
         public event Action<string> FeedbackEvent;
         public event Action<ChallengeResult> ResultRecorded;
 
         private readonly List<ContractDefinition> contracts = new List<ContractDefinition>();
+        private readonly List<ContractDefinition> offers = new List<ContractDefinition>();
         private ProgressionStore store;
         private HelicopterController boundAircraft;
         private Vector3 lastVelocity;
         private bool hasVelocity, suppressReset, modeStarted, savePending;
-        private int nextContract;
+        private int offersDealt;
         private float shiftScoreTotal;
 
         public LandingZone TargetZone
@@ -84,7 +90,9 @@ namespace HoverForHire
                 if (CurrentMission == null) return "No contract available. Landing locations are missing.";
                 switch (CurrentMission.State)
                 {
-                    case HoverForHire.MissionState.Available: return "Accept job: " + CurrentMission.Contract.Title;
+                    case HoverForHire.MissionState.Available:
+                        return offers.Count > 1 ? $"Choose a job. Enter takes offer {SelectedOffer + 1}; the Flight Desk shows every offer."
+                            : "Accept job: " + CurrentMission.Contract.Title;
                     case HoverForHire.MissionState.Accepted:
                     case HoverForHire.MissionState.Pickup: return "Pick up " + ServiceDescription(CurrentMission.Contract) + " at " + CurrentMission.Contract.Pickup.Name;
                     case HoverForHire.MissionState.Transport: return "Deliver " + ServiceDescription(CurrentMission.Contract) + " to " + CurrentMission.Contract.Destination.Name;
@@ -107,8 +115,7 @@ namespace HoverForHire
                         : CurrentTraining.State == TrainingState.Failed ? "RETRY · " + CurrentTraining.Feedback : CurrentTraining.Feedback;
                 if (ShiftFinished) return "Start another shift or return to free flight. Completed earnings are saved.";
                 if (CurrentMission == null) return "No landing zones configured.";
-                if (CurrentMission.State == HoverForHire.MissionState.Available)
-                    return $"${CurrentMission.Contract.BasePay} base · {CurrentMission.Contract.PayloadKg:0} kg · target {CurrentMission.Contract.ExpectedSeconds:0}s · {UnlockedContractCount}/{contracts.Count} contracts unlocked";
+                if (CurrentMission.State == HoverForHire.MissionState.Available) return OfferList();
                 if (CurrentMission.State == HoverForHire.MissionState.Failed) return "Retry restarts this contract at its pickup with no payload.";
                 if (CurrentMission.State == HoverForHire.MissionState.Delivered) return CurrentMission.Result.Feedback;
                 if (CurrentMission.DwellSeconds > 0f)
@@ -119,8 +126,69 @@ namespace HoverForHire
 
         public int UnlockedContractCount
         {
-            get { int count = 0; foreach (ContractDefinition contract in contracts) if (CompletedDeliveries >= contract.RequiredDeliveries) count++; return count; }
+            get { int count = 0; foreach (ContractDefinition contract in contracts) if (IsAvailable(contract)) count++; return count; }
         }
+
+        /// <summary>A contract is offered once enough deliveries are complete and its certifications are earned.</summary>
+        public bool IsAvailable(ContractDefinition contract)
+            => contract != null && CompletedDeliveries >= contract.RequiredDeliveries
+                && Certifications.Satisfies(Progression?.CompletedTrainingMask ?? 0, contract.RequiredCertification);
+
+        /// <summary>One offer on a line: number, title, payload, par and pay.</summary>
+        public string OfferSummary(int index)
+        {
+            if (index < 0 || index >= offers.Count) return "";
+            ContractDefinition offer = offers[index];
+            return $"{(index == SelectedOffer ? "›" : " ")} {index + 1}  {offer.Title} · {offer.PayloadKg:0} kg · par {ClockText(offer.ExpectedSeconds)} · ${offer.BasePay}";
+        }
+
+        /// <summary>Route, load, par, deadline, pay and wind at the destination, for the Flight Desk.</summary>
+        public string OfferDetail(int index)
+        {
+            if (index < 0 || index >= offers.Count) return "";
+            ContractDefinition offer = offers[index];
+            string wind = "";
+            if (Wind != null)
+            {
+                Vector3 destination = new Vector3(offer.Destination.X, offer.Destination.Y + 10f, offer.Destination.Z);
+                Vector3 air = Wind.WindAt(destination);
+                float speed = new Vector2(air.x, air.z).magnitude;
+                if (speed > 0.5f) wind = " · wind " + UnitFormat.FormatSpeed(speed, Units);
+            }
+            string cargo = offer.Type == ContractType.Passengers ? "passengers" : "cargo";
+            return $"{offer.Title} · {offer.Pickup.Name} → {offer.Destination.Name} · {offer.PayloadKg:0} kg {cargo} · " +
+                $"{UnitFormat.FormatDistance(offer.DistanceMetres, Units)} · par {ClockText(offer.ExpectedSeconds)} · limit {ClockText(offer.DeadlineSeconds)} · ${offer.BasePay}{wind}";
+        }
+
+        /// <summary>Jobs still locked behind certifications, with what earns the first missing one.</summary>
+        public string LockedHint
+        {
+            get
+            {
+                int locked = 0;
+                Certification missing = Certification.None;
+                foreach (ContractDefinition contract in contracts)
+                {
+                    if (CompletedDeliveries < contract.RequiredDeliveries || IsAvailable(contract)) continue;
+                    locked++;
+                    missing |= contract.RequiredCertification & ~EarnedCertifications;
+                }
+                if (locked == 0) return "";
+                foreach (Certification certification in Certifications.All)
+                    if ((missing & certification) != 0)
+                        return $"{locked} more {(locked == 1 ? "job needs" : "jobs need")} certification · {Certifications.Requirement(certification)}";
+                return "";
+            }
+        }
+
+        private string OfferList()
+        {
+            string list = "";
+            for (int i = 0; i < offers.Count; i++) list += (i > 0 ? "\n" : "") + OfferSummary(i);
+            return list;
+        }
+
+        private static string ClockText(float seconds) => $"{Mathf.FloorToInt(Mathf.Max(0f, seconds) / 60f)}:{Mathf.FloorToInt(Mathf.Max(0f, seconds) % 60f):00}";
 
         private LandingZone HomeZone => Zones != null && Zones.Length > 0 ? Zones[0] : null;
 
@@ -198,10 +266,10 @@ namespace HoverForHire
         {
             BeginMode(GameMode.DeliveryShift);
             RemainingSeconds = ShiftDurationSeconds;
-            Earnings = DeliveriesThisShift = nextContract = 0;
+            Earnings = DeliveriesThisShift = offersDealt = 0;
             shiftScoreTotal = 0f;
             BuildContracts();
-            OfferNextJob();
+            DealOffers(HomeZone != null ? HomeZone.Definition.Id : null);
             ResetAircraft(HomeZone);
             FeedbackEvent?.Invoke("15 minute shift · accept your first job");
         }
@@ -276,19 +344,41 @@ namespace HoverForHire
             finally { suppressReset = false; }
         }
 
+        /// <summary>Accept the selected offer; after a delivery, first deal fresh offers from where the aircraft landed.</summary>
         public void AcceptNextJob()
         {
             if (Mode != GameMode.DeliveryShift || ShiftFinished) return;
-            if (CurrentMission == null || CurrentMission.State == HoverForHire.MissionState.Delivered) OfferNextJob();
+            if (CurrentMission == null || CurrentMission.State == HoverForHire.MissionState.Delivered) DealOffers(LastPadId);
             if (CurrentMission != null && CurrentMission.Accept(ActiveAssists())) FeedbackEvent?.Invoke("Job accepted · " + CurrentMission.Contract.Title);
+        }
+
+        /// <summary>Accept one of the current offers by its index.</summary>
+        public void AcceptOffer(int index)
+        {
+            if (Mode != GameMode.DeliveryShift || ShiftFinished) return;
+            if (CurrentMission == null || CurrentMission.State == HoverForHire.MissionState.Delivered) DealOffers(LastPadId);
+            if (SelectOffer(index)) AcceptNextJob();
+        }
+
+        /// <summary>Highlight another offer before accepting; its pickup becomes the HUD target.</summary>
+        public bool SelectOffer(int index)
+        {
+            if (index < 0 || index >= offers.Count || CurrentMission == null || CurrentMission.State != HoverForHire.MissionState.Available) return false;
+            SelectedOffer = index;
+            CurrentMission = new MissionSession(offers[index]) { Units = Units };
+            return true;
         }
 
         public void BrowseNextJob()
         {
             if (Mode != GameMode.DeliveryShift || ShiftFinished) return;
-            if (CurrentMission == null || CurrentMission.State == HoverForHire.MissionState.Available
-                || CurrentMission.State == HoverForHire.MissionState.Delivered) OfferNextJob();
+            if (CurrentMission == null || CurrentMission.State == HoverForHire.MissionState.Delivered) DealOffers(LastPadId);
+            else if (CurrentMission.State == HoverForHire.MissionState.Available && offers.Count > 0) SelectOffer((SelectedOffer + 1) % offers.Count);
         }
+
+        /// <summary>Where the aircraft finished its last job, or home.</summary>
+        private string LastPadId => CurrentMission != null && CurrentMission.State == HoverForHire.MissionState.Delivered
+            ? CurrentMission.Contract.Destination.Id : HomeZone != null ? HomeZone.Definition.Id : null;
 
         public void Interact()
         {
@@ -306,7 +396,7 @@ namespace HoverForHire
             if (Mode == GameMode.Training) { StartTraining(TrainingIndex); return; }
             if (Mode == GameMode.FreeFlight) { ResetAircraft(HomeZone); return; }
             if (ShiftFinished) { StartShift(); return; }
-            if (CurrentMission == null) { OfferNextJob(); ResetAircraft(HomeZone); return; }
+            if (CurrentMission == null) { DealOffers(HomeZone != null ? HomeZone.Definition.Id : null); ResetAircraft(HomeZone); return; }
             if (CurrentMission.State == HoverForHire.MissionState.Delivered)
             {
                 // A completed contract remains completed; resetting cannot reopen its payout.
@@ -420,17 +510,21 @@ namespace HoverForHire
         private void OnApplicationPause(bool paused) { if (paused) SaveProgression(); }
         private void OnApplicationQuit() => SaveProgression();
 
-        private void OfferNextJob()
+        /// <summary>
+        /// Deal up to three distinct offers from the available contracts. The first starts at <paramref name="padId"/>
+        /// when any does, so a new job never begins with an empty repositioning flight. Seeded by progress, so the
+        /// same pilot record always sees the same offers.
+        /// </summary>
+        private void DealOffers(string padId)
         {
             if (contracts.Count == 0) BuildContracts();
-            for (int tried = 0; tried < contracts.Count; tried++)
-            {
-                ContractDefinition contract = contracts[nextContract++ % contracts.Count];
-                if (CompletedDeliveries < contract.RequiredDeliveries) continue;
-                CurrentMission = new MissionSession(contract) { Units = Units };
-                return;
-            }
-            CurrentMission = null;
+            offers.Clear();
+            SelectedOffer = 0;
+            var available = new List<ContractDefinition>();
+            foreach (ContractDefinition contract in contracts) if (IsAvailable(contract)) available.Add(contract);
+            offers.AddRange(OfferBoard.Deal(available, padId, unchecked(CompletedDeliveries * 7919 + offersDealt * 104729 + 17)));
+            offersDealt++;
+            CurrentMission = offers.Count > 0 ? new MissionSession(offers[0]) { Units = Units } : null;
         }
 
         private void BuildContracts()
@@ -440,24 +534,30 @@ namespace HoverForHire
             AddContract("town-commute", "Town connection", ContractType.Passengers, 0, 1, 160f, 190, 0);
             AddContract("dock-parcel", "Ferry provisions", ContractType.Cargo, 1, 2, 230f, 250, 0);
             AddContract("yard-spares", "Workshop spares", ContractType.Cargo, 2, 3, 300f, 330, 2);
-            AddContract("clinic-transfer", "Clinic staff transfer", ContractType.Passengers, 1, 4, 160f, 320, 2);
+            AddContract("clinic-transfer", "Clinic staff transfer", ContractType.Passengers, 1, 4, 160f, 320, 2, Certification.Rooftop);
             AddContract("orchard-crates", "Orchard produce", ContractType.Cargo, 5, 3, 330f, 390, 2);
-            AddContract("ridge-crew", "Ridge survey crew", ContractType.Passengers, 3, 6, 240f, 430, 4);
-            AddContract("summit-stores", "Summit supplies", ContractType.Cargo, 3, 7, 350f, 490, 4);
-            AddContract("light-keeper", "Lighthouse relief", ContractType.Passengers, 2, 8, 160f, 440, 4);
-            AddContract("cove-samples", "East cove samples", ContractType.Cargo, 9, 4, 180f, 440, 4);
+            AddContract("ridge-crew", "Ridge survey crew", ContractType.Passengers, 3, 6, 240f, 430, 4, Certification.Mountain);
+            AddContract("summit-stores", "Summit supplies", ContractType.Cargo, 3, 7, 350f, 490, 4, Certification.Mountain);
+            AddContract("light-keeper", "Lighthouse relief", ContractType.Passengers, 2, 8, 160f, 440, 4, Certification.Coastal);
+            AddContract("cove-samples", "East cove samples", ContractType.Cargo, 9, 4, 180f, 440, 4, Certification.Coastal | Certification.Rooftop);
+            AddContract("summit-medevac", "Summit medical evacuation", ContractType.Passengers, 7, 4, 180f, 640, 4,
+                Certification.Emergency | Certification.Mountain | Certification.Rooftop);
         }
 
-        private void AddContract(string id, string title, ContractType type, int pickup, int destination, float kg, int pay, int required)
+        /// <summary>Par for a job: a minute for takeoff, loading and landing, plus cruise at 25 m/s.</summary>
+        public static float ParSeconds(float distanceMetres) => 60f + Mathf.Max(0f, distanceMetres) / 25f;
+
+        private void AddContract(string id, string title, ContractType type, int pickup, int destination, float kg, int pay, int required,
+            Certification certification = Certification.None)
         {
             if (pickup >= Zones.Length || destination >= Zones.Length || Zones[pickup] == null || Zones[destination] == null) return;
             float distance = Vector3.Distance(Zones[pickup].transform.position, Zones[destination].transform.position);
-            float expected = 150f + distance / 10f;
+            float par = ParSeconds(distance);
             contracts.Add(new ContractDefinition
             {
                 Id = id, Title = title, Type = type, Pickup = Zones[pickup].Definition, Destination = Zones[destination].Definition,
-                PayloadKg = kg, BasePay = pay, RequiredDeliveries = required, ExpectedSeconds = expected,
-                DeadlineSeconds = expected * (required == 0 ? 3f : 2f), DwellSeconds = required >= 4 ? 4f : 3f,
+                PayloadKg = kg, BasePay = pay, RequiredDeliveries = required, RequiredCertification = certification, DistanceMetres = distance,
+                ExpectedSeconds = par, DeadlineSeconds = par * (required == 0 ? 3f : 2f), DwellSeconds = required >= 4 ? 4f : 3f,
                 MaximumGroundSpeed = required >= 4 ? 0.5f : 0.8f, MaximumTiltDegrees = required >= 4 ? 6f : 8f
             });
         }

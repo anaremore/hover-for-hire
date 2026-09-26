@@ -112,7 +112,7 @@ namespace HoverForHire
             bool flying = shift && job != null && (job.State == MissionState.Accepted || job.State == MissionState.Pickup || job.State == MissionState.Transport);
             if (!flying) { JobClock = ""; return; }
             float elapsed = job.ElapsedSeconds, target = job.Contract.ExpectedSeconds, deadline = job.Contract.DeadlineSeconds;
-            JobClock = $"JOB {TimeText(elapsed)}  /  TARGET {TimeText(target)}";
+            JobClock = $"JOB {TimeText(elapsed)}  /  PAR {TimeText(target)}";
             JobClockColor = elapsed > deadline * 0.8f ? Red : elapsed > target ? FlightHudGraphics.Amber : FlightHudGraphics.Phosphor;
         }
 
@@ -152,7 +152,8 @@ namespace HoverForHire
             float speed = new Vector2(wind.x, wind.z).magnitude, dt = Time.deltaTime;
             // A slowly decaying peak shows the gusts around the mean.
             windPeak = Mathf.Max(speed, windPeak - Mathf.Max(0f, dt) * 0.4f);
-            WindVisible = windPeak > 0.5f;
+            // Shown while the air is moving; a leftover peak alone (for example after leaving a windy drill) is not wind.
+            WindVisible = speed > 0.5f;
             if (!WindVisible) { WindText = WindPeakText = ""; return; }
             float from = Mathf.Atan2(-wind.x, -wind.z) * Mathf.Rad2Deg;
             WindFromRelative = Mathf.DeltaAngle(aircraft.Heading, from);

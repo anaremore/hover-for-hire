@@ -49,6 +49,10 @@ namespace HoverForHire
         public float MaximumTiltDegrees = 8f;
         public int BasePay = 200;
         public int RequiredDeliveries;
+        /// <summary>Certifications (earned in training) the pilot needs before this job is offered.</summary>
+        public Certification RequiredCertification;
+        /// <summary>Straight-line distance from pickup to destination, metres.</summary>
+        public float DistanceMetres;
 
         public bool IsStableAt(FlightSample sample, ZoneDefinition zone)
         {

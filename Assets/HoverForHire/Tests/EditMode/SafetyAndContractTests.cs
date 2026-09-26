@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -67,12 +68,14 @@ namespace HoverForHire.Tests
                 director.ProgressionPathOverride = save;
                 director.Zones = zones;
                 director.StartShift();
-                Assert.That(director.Contracts.Count, Is.EqualTo(9));
+                Assert.That(director.Contracts.Count, Is.EqualTo(10));
                 int immediate = 0, advanced = 0;
                 foreach (ContractDefinition contract in director.Contracts)
                 {
                     Assert.That(contract.Pickup.Id, Is.Not.EqualTo(contract.Destination.Id), contract.Id);
-                    Assert.That(contract.ExpectedSeconds, Is.GreaterThan(0f), contract.Id);
+                    Assert.That(contract.ExpectedSeconds, Is.EqualTo(MissionDirector.ParSeconds(contract.DistanceMetres)).Within(0.01f),
+                        contract.Id + ": par is a minute plus cruise at 25 m/s.");
+                    Assert.That(contract.DeadlineSeconds, Is.EqualTo(contract.ExpectedSeconds * (contract.RequiredDeliveries == 0 ? 3f : 2f)).Within(0.01f), contract.Id);
                     if (contract.RequiredDeliveries == 0) immediate++;
                     if (contract.RequiredDeliveries >= 4)
                     {
@@ -90,7 +93,14 @@ namespace HoverForHire.Tests
                     }
                 }
                 Assert.That(immediate, Is.EqualTo(2), "The first helicopter can take its first two jobs immediately.");
-                Assert.That(advanced, Is.EqualTo(4));
+                Assert.That(advanced, Is.EqualTo(5));
+                Certification Required(string id) => director.Contracts.First(contract => contract.Id == id).RequiredCertification;
+                Assert.That(Required("town-commute") | Required("dock-parcel") | Required("yard-spares") | Required("orchard-crates"), Is.EqualTo(Certification.None));
+                Assert.That(Required("clinic-transfer"), Is.EqualTo(Certification.Rooftop));
+                Assert.That(Required("ridge-crew") & Required("summit-stores"), Is.EqualTo(Certification.Mountain));
+                Assert.That(Required("light-keeper"), Is.EqualTo(Certification.Coastal));
+                Assert.That(Required("cove-samples"), Is.EqualTo(Certification.Coastal | Certification.Rooftop));
+                Assert.That(Required("summit-medevac"), Is.EqualTo(Certification.Emergency | Certification.Mountain | Certification.Rooftop));
             }
             finally
             {

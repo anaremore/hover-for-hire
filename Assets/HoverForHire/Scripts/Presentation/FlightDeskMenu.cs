@@ -110,13 +110,19 @@ namespace HoverForHire
             if (Button("Free flight")) { Missions.StartFreeFlight(); Input.ResetCommand(); hud.SetPause(false); }
             if (Button("Start 15-minute shift")) { Missions.StartShift(); Input.ResetCommand(); hud.SetPause(false); }
             GUILayout.EndHorizontal();
-            if (Button("Accept next contract / continue service")) { Missions.Interact(); hud.SetPause(false); }
             if (Missions.Mode == GameMode.DeliveryShift && !Missions.ShiftFinished
                 && (Missions.MissionState == MissionState.Available || Missions.MissionState == MissionState.Delivered))
             {
-                GUILayout.Label(Missions.CurrentObjective, S.Label);
-                if (Button("Browse next offer")) Missions.BrowseNextJob();
+                // After a delivery, deal fresh offers from the pad the aircraft landed on.
+                if (Missions.MissionState == MissionState.Delivered) Missions.BrowseNextJob();
+                GUILayout.Space(6);
+                GUILayout.Label("OFFERS  /  choose your next job", S.Label);
+                for (int i = 0; i < Missions.Offers.Count; i++)
+                    if (Button(Missions.OfferDetail(i))) { Missions.AcceptOffer(i); hud.SetPause(false); }
+                string locked = Missions.LockedHint;
+                if (locked.Length > 0) GUILayout.Label(locked + ". Training earns certifications.", S.Small);
             }
+            else if (Button("Continue service / retry")) { Missions.Interact(); hud.SetPause(false); }
             GUILayout.Space(10);
             GUILayout.Label("TRAINING  /  one skill at a time", S.Label);
             for (int i = 0; i < DrillLabels.Length; i++)
