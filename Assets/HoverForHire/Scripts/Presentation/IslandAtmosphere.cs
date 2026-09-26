@@ -26,7 +26,7 @@ namespace HoverForHire
             sun.shadowNormalBias = .25f;
             sun.shadowStrength = .78f;
             RenderSettings.sun = sun;
-            Shader.SetGlobalFloat(WorldConstants.SeaLevelShaderId, WorldConstants.SeaLevel);
+            WorldConstants.PublishShaderGlobals();
             var sky = Resources.Load<Material>("Art/Materials/Sky");
             if (sky != null)
             {
@@ -42,7 +42,10 @@ namespace HoverForHire
                 var pixels = new Color[size * size];
                 for (int y = 0; y < size; y++)
                     for (int x = 0; x < size; x++)
-                        pixels[y * size + x] = new Color(Mathf.Clamp01((IslandWorld.Height((x / (float)(size - 1) - .5f) * 2400, (y / (float)(size - 1) - .5f) * 2200) + 40) / 240), 0, 0, 1);
+                    {
+                        float height = IslandWorld.Height((x / (float)(size - 1) - .5f) * WorldConstants.WorldSizeX, (y / (float)(size - 1) - .5f) * WorldConstants.WorldSizeZ);
+                        pixels[y * size + x] = new Color(Mathf.Clamp01((height - WorldConstants.CoastHeightMin) / WorldConstants.CoastHeightRange), 0, 0, 1);
+                    }
                 tex.SetPixels(pixels);
                 tex.Apply(false, true);
                 IslandWorld.Water.SetTexture("_CoastHeight", tex);

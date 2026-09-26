@@ -18,7 +18,7 @@ namespace HoverForHire
         static readonly string[] names = { "01 / HOME BASE", "02 / TOWN GREEN", "03 / FERRY DOCK", "04 / FREIGHT YARD", "05 / ROOFTOP CLINIC", "06 / ORCHARD", "07 / RIDGE STATION", "08 / SUMMIT LODGE", "09 / LIGHTHOUSE", "10 / EAST COVE" };
         /// <summary>Terrain grid: cells per side and the rectangle it covers, in metres.</summary>
         public const int TerrainCells = 220;
-        public const float TerrainSizeX = 2400, TerrainSizeZ = 2200;
+        public const float TerrainSizeX = WorldConstants.WorldSizeX, TerrainSizeZ = WorldConstants.WorldSizeZ;
         /// <summary>Landing radius of each pad; the service rules and scenery clearances both derive from it.</summary>
         public static float PadRadius(int index) => index == 0 ? 17 : index == 4 ? 9 : index > 5 ? 10 : 14;
         /// <summary>Horizontal clearance kept free of trees and tall props around a pad: rotor reach from the pad edge plus margin.</summary>

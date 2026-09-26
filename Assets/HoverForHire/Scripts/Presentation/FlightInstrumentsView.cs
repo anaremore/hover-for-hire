@@ -298,6 +298,8 @@ namespace HoverForHire
         }
 
         private Rect ChartFrame => new Rect(Width - 246, 429, 220, 248);
+        /// <summary>The square chart covers the island's larger dimension.</summary>
+        private const float ChartExtent = WorldConstants.WorldSizeX;
 
         private void DrawMap()
         {
@@ -339,7 +341,7 @@ namespace HoverForHire
             }
             FlightHudGraphics.Circle(here, 12, new Color(.94f, .96f, .89f, .30f), 28);
             FlightHudGraphics.Aircraft(here, Aircraft.Heading, FlightHudGraphics.Paper, .85f);
-            FlightHudGraphics.Fill(new Rect(r.x + 8, r.yMax - 12, r.width * 500 / 2400, 2), FlightHudGraphics.Muted);
+            FlightHudGraphics.Fill(new Rect(r.x + 8, r.yMax - 12, r.width * 500 / ChartExtent, 2), FlightHudGraphics.Muted);
             S.Text(new Rect(r.x + 8, r.yMax - 34, 70, 20), M.Units == UnitSystem.Aviation ? "0.27 nm" : "500 m", S.HudSmall, FlightHudGraphics.Muted);
         }
 
@@ -388,8 +390,8 @@ namespace HoverForHire
         private static Vector2 Clamp(Vector2 value, float radius) => Vector2.ClampMagnitude(value, radius);
 
         private static Vector2 MapPosition(Rect rect, Vector3 position)
-            => new Vector2(Mathf.Clamp(rect.center.x + position.x / 2400 * rect.width, rect.x + 9, rect.xMax - 9),
-                Mathf.Clamp(rect.center.y - position.z / 2400 * rect.height, rect.y + 9, rect.yMax - 9));
+            => new Vector2(Mathf.Clamp(rect.center.x + position.x / ChartExtent * rect.width, rect.x + 9, rect.xMax - 9),
+                Mathf.Clamp(rect.center.y - position.z / ChartExtent * rect.height, rect.y + 9, rect.yMax - 9));
 
         private static void MapRoad(Rect rect, Vector3 from, Vector3 to)
             => FlightHudGraphics.Line(MapPosition(rect, from), MapPosition(rect, to), new Color(.80f, .84f, .67f, .35f), 1.5f);
@@ -403,7 +405,7 @@ namespace HoverForHire
             for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++)
             {
-                float wx = (x / (float)(size - 1) - .5f) * 2400, wz = (y / (float)(size - 1) - .5f) * 2400;
+                float wx = (x / (float)(size - 1) - .5f) * ChartExtent, wz = (y / (float)(size - 1) - .5f) * ChartExtent;
                 float height = IslandWorld.Height(wx, wz);
                 if (height < 0) { pixels[y * size + x] = new Color(.075f, .13f, .13f); continue; }
                 float slope = (IslandWorld.Height(wx - 8, wz + 8) - height) * .013f;
