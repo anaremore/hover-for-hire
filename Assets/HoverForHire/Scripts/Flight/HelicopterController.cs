@@ -15,6 +15,8 @@ namespace HoverForHire
         public MonoBehaviour InputSource;
         public Rigidbody Body;
         public AssistSettings Assists = new AssistSettings();
+        /// <summary>Hover hold: bounded drift, height and heading hold that hands back on any deliberate pilot input.</summary>
+        public readonly HoverHoldAssist HoverHold = new HoverHoldAssist();
         /// <summary>Which physical challenges are active. The defaults (ground effect and translational lift only) are Relaxed.</summary>
         public RealismSettings Realism = new RealismSettings();
         /// <summary>Optional air-mass motion. Null is calm air.</summary>
@@ -224,7 +226,8 @@ namespace HoverForHire
             float horizontalAir = new Vector2(airVelocity.x, airVelocity.z).magnitude;
             // The fuselage reacts to the torque the engine delivers into the rotor: none once it has failed.
             float rotorReactionNm = LiftNewtons * Mathf.Max(0f, Tuning.RotorTorqueArmMeters) * engineTorqueShare;
-            AssistedCommand = solver.Step(RawCommand, localAngular, inverseRotation * Vector3.up,
+            PilotCommand flown = HoverHold.Filter(RawCommand, this, dt);
+            AssistedCommand = solver.Step(flown, localAngular, inverseRotation * Vector3.up,
                 rotorReactionNm, localAir, inertia, Tuning, Assists, dt);
 
             Vector3 localThrust = FlightMath.LocalThrustDirection(AssistedCommand.Cyclic, Tuning.RotorDiskTiltDegrees);
@@ -430,6 +433,7 @@ namespace HoverForHire
         public void ResetAt(Vector3 position, Quaternion rotation, Vector3 velocity)
         {
             supports.Clear();
+            HoverHold.Disengage("Hover hold off: aircraft reset.");
             Crashed = false;
             LastCrashCause = CrashCause.None;
             CrashValue = CrashLimit = 0f;

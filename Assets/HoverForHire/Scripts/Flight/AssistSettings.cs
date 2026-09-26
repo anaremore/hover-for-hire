@@ -12,6 +12,8 @@ namespace HoverForHire
         public bool AutoLevel = true;
         public bool YawStabilization = true;
         public bool TorqueCompensation = true;
+        [Tooltip("Stick sets bank and pitch (up to the commanded-attitude limit) instead of a rotation rate. Uses the rate loop.")]
+        public bool AttitudeCommand;
 
         public void SetPreset(AssistPreset preset)
         {
@@ -45,6 +47,7 @@ namespace HoverForHire
                 if (AutoLevel) result += "LEVEL ";
                 if (YawStabilization) result += "YAW ";
                 if (TorqueCompensation) result += "TORQUE ";
+                if (AttitudeCommand) result += "ATTITUDE ";
                 return result.Length == 0 ? "UNASSISTED" : result.TrimEnd();
             }
         }

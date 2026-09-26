@@ -186,11 +186,13 @@ namespace HoverForHire
     public sealed class AssistSolver
     {
         private Vector4 weights;
+        private float attitudeWeight;
         private PilotCommand output;
 
         public void Reset(AssistSettings settings, PilotCommand initial)
         {
             weights = settings.Weights;
+            attitudeWeight = settings.AttitudeCommand ? 1f : 0f;
             output = initial.Clamped();
         }
 
@@ -217,6 +219,15 @@ namespace HoverForHire
                 * tuning.LevelAuthority * centered * weights.y;
 
             Vector2 requested = Vector2.ClampMagnitude(raw.Cyclic + level, 1f);
+            attitudeWeight = Mathf.Lerp(attitudeWeight, settings.AttitudeCommand ? 1f : 0f, FlightMath.ResponseFraction(dt, tuning.AssistBlendSeconds));
+            if (attitudeWeight > 0.001f)
+            {
+                // Attitude command: the stick sets bank and pitch, and the rate loop flies the aircraft to them.
+                Vector2 attitude = -new Vector2(Mathf.Atan2(worldUpLocal.x, worldUpLocal.y), Mathf.Atan2(worldUpLocal.z, worldUpLocal.y)) * Mathf.Rad2Deg;
+                Vector2 commandedAttitude = raw.Cyclic * tuning.MaximumCommandedAttitudeDegrees;
+                Vector2 toTarget = Vector2.ClampMagnitude((commandedAttitude - attitude) / Mathf.Max(1f, tuning.AttitudeErrorForFullRateDegrees), 1f);
+                requested = Vector2.Lerp(requested, toTarget, attitudeWeight);
+            }
             Vector2 targetRate = requested * tuning.MaximumCyclicRateDegrees * Mathf.Deg2Rad;
             // Feed-forward sustains the requested rate against passive rotor damping; feedback removes the error.
             Vector2 feedForward = new Vector2(

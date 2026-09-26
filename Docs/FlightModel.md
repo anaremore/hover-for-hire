@@ -78,7 +78,7 @@ Still not modeled:
 * sling loads;
 * failures other than engine and tail rotor.
 
-Hover hold is not implemented yet. These omissions matter in a real aircraft, and this game is not a certified simulator.
+These omissions matter in a real aircraft, and this game is not a certified simulator.
 
 ## Assists
 
@@ -92,6 +92,8 @@ Rate stabilization combines a feed-forward term (the command that sustains the r
 | Auto-level | A centered cyclic adds a bounded leveling request, fading out as the pilot moves the stick. It does not hold location or cancel horizontal motion. |
 | Yaw stabilization | Pedals request yaw rate. Centered pedals damp yaw through the tail command. Above 8 m/s forward airspeed (fully by 18 m/s) it also requests the coordinated-turn rate g·tan(bank)/airspeed, so banking at speed turns the nose instead of sliding sideways. |
 | Torque compensation | Adds tail feed-forward against the modeled rotor reaction moment. |
+| Attitude command (off by default) | The stick sets a bank and pitch target, up to ±25° at full deflection. The rate loop flies to it at full rate once the error reaches 10°, so centering the stick levels the aircraft. |
+| Hover hold (H) | Below 5 m/s in the air, it adds bounded cyclic (0.35), collective (±8%) and pedal (0.3) inputs that null ground drift and vertical speed and hold the heading. Any deliberate pilot input hands back. It flies through the same controls: no hidden forces. |
 
 Beginner enables all four settings. Standard enables rate, yaw and torque settings. Unassisted disables all four; actuator response and passive aerodynamic drag still exist. Each flag can be changed independently. Yaw stabilization alone can counter some rotor reaction after it detects a yaw rate; torque compensation provides the separate feed-forward action. `Assists.Summary` identifies the actual flags for the HUD and result records.
 

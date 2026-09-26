@@ -26,9 +26,16 @@ Pause menus support the gamepad without a mouse: D-pad or left stick up/down mov
 | Reset at helipad | Backspace | Select / View |
 | Accept / interact (Free Flight: start a shift) | Enter | South face button (A / Cross) |
 | Cycle assist preset (announced) | F2 | D-pad up |
-| Hover-hold status (deferred) | H | West face button (X / Square) |
+| Hover hold on / off | H | West face button (X / Square) |
 | Development overlay | F1 | D-pad right |
 | Record flight data (CSV) | F3 | — |
+
+**Hover hold** (H) engages in the air below 5 m/s of ground speed. It stops drift and sink and keeps the heading by adding small, bounded cyclic, collective and pedal inputs to the pilot's own:
+* **Authority limits:** cyclic 0.35, collective ±8%, pedals 0.3.
+* **Hand-back:** moving the stick beyond 0.2, the collective beyond 3% or the pedals beyond 0.3 hands control back at once, as does pressing H again, touching down or resetting.
+* **Indication:** the HUD shows HOVER HOLD, and results record HOLD among the assists.
+
+**Attitude command** (an assist setting, off by default) makes the stick set bank and pitch, up to ±25°, instead of a rotation rate. Centering the stick flies level. It works through rate stabilization.
 
 Mouse up commands forward pitch and mouse right commands right roll; either mouse axis can be inverted independently. Gamepad up commands forward pitch. Keyboard and trigger collective inputs change a persistent 0–100% setting, initially zero. Releasing them holds the setting. Pressing opposing inputs at equal strength cancels their adjustment; triggers adjust proportionally to pressure. Collective controls lift demand, not altitude or vertical speed. The HUD shows collective to 0.1% with an amber tick at the hover setting for the current weight.
 

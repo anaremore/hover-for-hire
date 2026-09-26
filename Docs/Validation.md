@@ -254,6 +254,6 @@ On native macOS and Linux, repeat launch, a brief gamepad/keyboard flight, camer
 
 ## Scope limits that affect interpretation
 
-Hover hold is not implemented yet; its binding reports that the feature is unavailable and is not an active assist. The realism effects are compact models chosen to teach the right technique. Blade-element aerodynamics, retreating-blade stall, failures beyond the engine and tail rotor, and aviation certification are outside this slice. The model and its units are detailed in [FlightModel.md](FlightModel.md); control processing and platform fallbacks are in [Controls.md](Controls.md).
+Hover hold is a bounded assist that hands back on any deliberate input (see [Controls.md](Controls.md)). The realism effects are compact models chosen to teach the right technique. Blade-element aerodynamics, retreating-blade stall, failures beyond the engine and tail rotor, and aviation certification are outside this slice. The model and its units are detailed in [FlightModel.md](FlightModel.md); control processing and platform fallbacks are in [Controls.md](Controls.md).
 
 No automated result establishes that the helicopter feels good. Native platform testing, comfortable camera tuning, controller ergonomics and satisfying approaches remain explicit human acceptance work.

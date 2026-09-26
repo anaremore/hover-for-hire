@@ -54,7 +54,7 @@ namespace HoverForHire
         public float WindFromRelative;
         public string WindText = "", WindPeakText = "";
         // Hover display (heading-up): ground drift and its trend in m/s, pad offset in metres.
-        public bool HoverVisible, PadVisible, ServiceReady;
+        public bool HoverVisible, PadVisible, ServiceReady, HoverHoldEngaged;
         public Vector2 Drift, DriftTrend, PadOffset;
         public float ServiceSpeed = DefaultServiceSpeed;
         public string DriftText = "", PadText = "";
@@ -230,7 +230,10 @@ namespace HoverForHire
                 : $"ROTOR  {aircraft.RotorRpm:0} rpm   /   {aircraft.PayloadKg:0} kg";
             AssistSettings assists = aircraft.Assists;
             string aids = (assists.RateStabilization ? "RATE  " : "") + (assists.AutoLevel ? "LEVEL  " : "")
-                + (assists.YawStabilization ? "YAW  " : "") + (assists.TorqueCompensation ? "TORQUE" : "");
+                + (assists.YawStabilization ? "YAW  " : "") + (assists.TorqueCompensation ? "TORQUE  " : "")
+                + (assists.AttitudeCommand ? "ATT  " : "") + (aircraft.HoverHold.Engaged ? "HOLD" : "");
+            aids = aids.TrimEnd();
+            HoverHoldEngaged = aircraft.HoverHold.Engaged;
             AssistsLine = "ASSIST  /  " + (aids.Length == 0 ? "OFF" : aids);
             ContextLine = missions.Mode == GameMode.DeliveryShift
                 ? $"COMFORT {missions.ComfortPercent:0}%   CARGO {missions.CargoConditionPercent:0}%"

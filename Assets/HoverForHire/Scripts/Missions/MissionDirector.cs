@@ -491,7 +491,7 @@ namespace HoverForHire
         }
 
         private string ActiveAssists() => !string.IsNullOrWhiteSpace(AssistSnapshot) ? AssistSnapshot
-            : Aircraft != null && Aircraft.Assists != null ? Aircraft.Assists.Summary : "Not recorded";
+            : Aircraft != null && Aircraft.Assists != null ? Aircraft.Assists.Summary + (Aircraft.HoverHold.Engaged ? " HOLD" : "") : "Not recorded";
 
         private void RecordResult(ChallengeResult result)
         {

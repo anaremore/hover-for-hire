@@ -356,7 +356,8 @@ namespace HoverForHire
             Rect frame = ChartFrame;
             S.Box(frame, .82f);
             FlightHudGraphics.Frame(frame, new Color(.8f, .94f, .7f, .42f));
-            S.Text(new Rect(frame.x + 11, frame.y + 6, 120, 22), "HOVER  /  DRIFT", S.HudSmall);
+            S.Text(new Rect(frame.x + 11, frame.y + 6, 120, 22), M.HoverHoldEngaged ? "HOVER HOLD" : "HOVER  /  DRIFT", S.HudSmall,
+                M.HoverHoldEngaged ? Green : FlightHudGraphics.Phosphor);
             S.Text(new Rect(frame.x + 110, frame.y + 6, 100, 22), M.ServiceReady ? "STEADY" : "", S.HudRight, Green);
             var center = new Vector2(frame.center.x, frame.y + 128);
             const float half = 92, pixelsPerMetrePerSecond = half / 3f;

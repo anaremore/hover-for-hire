@@ -267,7 +267,9 @@ namespace HoverForHire
             a.AutoLevel = Toggle(a.AutoLevel, "Auto-level with centered cyclic");
             a.YawStabilization = Toggle(a.YawStabilization, "Yaw stabilization");
             a.TorqueCompensation = Toggle(a.TorqueCompensation, "Main rotor torque compensation");
-            GUILayout.Label("Hover hold is deferred pending flight tuning. Level assist does not stop drift or hold altitude.", S.Small);
+            a.AttitudeCommand = Toggle(a.AttitudeCommand, "Attitude command: stick sets bank and pitch, not a rate (with rate stabilization)");
+            GUILayout.Label($"Hover hold ({hud.Key("HoverHold")}) stops drift and sink in a hover with small bounded inputs; any control input hands back. " +
+                "Level assist alone does not stop drift or hold height.", S.Small);
             RealismSection();
         }
 

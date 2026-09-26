@@ -31,6 +31,10 @@ namespace HoverForHire
         [Min(1f)] public float LevelAngleForFullCommand = 24f;
         [Range(0.01f, 1f)] public float LevelCyclicThreshold = 0.22f;
         [Range(0f, 1f)] public float LevelAuthority = 0.6f;
+        [Tooltip("Attitude command: bank and pitch at full stick deflection.")]
+        [Range(5f, 45f)] public float MaximumCommandedAttitudeDegrees = 25f;
+        [Tooltip("Attitude command: attitude error that asks for the full rotation rate.")]
+        [Min(1f)] public float AttitudeErrorForFullRateDegrees = 10f;
 
         [Header("Turn coordination assist (part of yaw stabilization)")]
         [Tooltip("Forward airspeed where yaw stabilization starts adding the coordinated-turn rate.")]

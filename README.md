@@ -29,6 +29,7 @@ If setup assets ever need regeneration, use **Hover for Hire → Prepare project
   - seeded island wind with a height profile, gusts, turbulence and live windsocks.
 
   Warnings cover low rotor RPM, overtorque, settling and failures.
+- Beginner aids: hover hold (H), which stops drift and sink with small bounded inputs and hands back on any control input; and an optional attitude-command mode, where the stick sets bank and pitch.
 - Independent rate stabilization (with feed-forward), auto-level, yaw stabilization with coordinated turns at speed, and rotor torque compensation with Beginner, Standard, and Unassisted presets. Assists blend through bounded commands; turning them off removes their stabilization commands.
 - Complete collision: merged low-poly collision for about 3,200 trees and rocks, props, roofs, cranes and masts; exact rotor-disc blade-strike detection for main and tail rotors; a solid sea surface with ditching; crash panels that name the cause, the measured value and the limit.
 - A first-launch welcome, key hints that follow your bindings and device, Enter to start a shift from Free Flight, announced assist presets, and non-strobing rotors with motion discs.
@@ -72,6 +73,7 @@ If setup assets ever need regeneration, use **Hover for Hire → Prepare project
 | Pause / flight desk | Escape | Start |
 | Reset / retry | Backspace | Select |
 | Cycle assists | F2 | D-pad up |
+| Hover hold on / off | H | West / X |
 | Development overlay | F1 | D-pad right |
 | Record flight data (CSV) | F3 | — |
 
@@ -110,7 +112,7 @@ See [validation results and playtest checklist](Docs/Validation.md), [flight-mod
 
 ## Limits of this slice
 
-The flight model is deliberately simplified. Lift scales with collective and is tilted with the aircraft/disc. The realism effects are compact models chosen to teach the right technique: momentum-theory power, capped Cheeseman–Bennett ground effect and a severity-based vortex ring. They are not blade-element aerodynamics. Blade flapping, retreating-blade stall, fuel, sling loads and hover hold are not modeled yet. Rotor wash and broken parts are visual effects; they do not add hidden flight forces. Crash severity varies visually, while the existing crash/recovery rules remain intact. See [art direction, asset sources and effects](Docs/Art.md).
+The flight model is deliberately simplified. Lift scales with collective and is tilted with the aircraft/disc. The realism effects are compact models chosen to teach the right technique: momentum-theory power, capped Cheeseman–Bennett ground effect and a severity-based vortex ring. They are not blade-element aerodynamics. Blade flapping, retreating-blade stall, fuel and sling loads are not modeled. Rotor wash and broken parts are visual effects; they do not add hidden flight forces. Crash severity varies visually, while the existing crash/recovery rules remain intact. See [art direction, asset sources and effects](Docs/Art.md).
 
 The project is a game and practice aid, not a certified aviation simulator. Automated checks establish invariants and detect regressions; they cannot establish that the helicopter feels satisfying. Native macOS/Linux controller, display, and audio checks require those machines.
 

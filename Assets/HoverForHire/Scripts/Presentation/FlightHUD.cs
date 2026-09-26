@@ -49,10 +49,11 @@ namespace HoverForHire
             Input.InteractRequested += Interact;
             Input.DebugRequested += ToggleDebug;
             Input.AssistRequested += CycleAssists;
-            Input.HoverRequested += HoverNotice;
+            Input.HoverRequested += ToggleHoverHold;
             Input.RecordRequested += ToggleRecording;
             Aircraft.ResetPerformed += ResetInput;
             Aircraft.SystemFailed += OnSystemFailure;
+            Aircraft.HoverHold.Changed += OnHoverHoldChanged;
             Missions.FeedbackEvent += MissionFeedback;
             Missions.StartFreeFlight();
             ApplyLivery();
@@ -214,7 +215,14 @@ namespace HoverForHire
                 : "Flight recording saved: " + System.IO.Path.GetFileName(recorder.CurrentPath), 6f);
         }
 
-        private void HoverNotice() => Notify("Hover hold is deferred. Use rate / level assist and practice a steady collective.", 6f);
+        private void ToggleHoverHold()
+        {
+            if (Paused) return;
+            if (Aircraft.HoverHold.Engaged) Aircraft.HoverHold.Disengage("Hover hold off.");
+            else if (!Aircraft.HoverHold.TryEngage(Aircraft, Input.Command.Collective, out string reason)) Notify(reason, 4f);
+        }
+
+        private void OnHoverHoldChanged(bool engaged, string reason) => Notify(reason, engaged ? 4f : 3f);
 
         private void CycleAssists()
         {
@@ -234,9 +242,14 @@ namespace HoverForHire
                 Input.InteractRequested -= Interact;
                 Input.DebugRequested -= ToggleDebug;
                 Input.AssistRequested -= CycleAssists;
-                Input.HoverRequested -= HoverNotice;
+                Input.HoverRequested -= ToggleHoverHold;
                 Input.RecordRequested -= ToggleRecording;
-                if (Aircraft != null) { Aircraft.ResetPerformed -= ResetInput; Aircraft.SystemFailed -= OnSystemFailure; }
+                if (Aircraft != null)
+                {
+                    Aircraft.ResetPerformed -= ResetInput;
+                    Aircraft.SystemFailed -= OnSystemFailure;
+                    Aircraft.HoverHold.Changed -= OnHoverHoldChanged;
+                }
                 if (Game.Missions != null) Missions.FeedbackEvent -= MissionFeedback;
             }
             instruments?.Dispose();

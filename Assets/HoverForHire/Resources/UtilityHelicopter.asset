@@ -33,6 +33,8 @@ MonoBehaviour:
   LevelAngleForFullCommand: 24
   LevelCyclicThreshold: 0.22
   LevelAuthority: 0.6
+  MaximumCommandedAttitudeDegrees: 25
+  AttitudeErrorForFullRateDegrees: 10
   CoordinationStartSpeed: 8
   CoordinationFullSpeed: 18
   LinearDrag: {x: 34, y: 72, z: 12}
