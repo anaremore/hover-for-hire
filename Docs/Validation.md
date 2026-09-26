@@ -80,6 +80,23 @@ Low roughly halves the GPU time of High. CPU times vary by about ±0.2 ms betwee
 
 The heap is larger because the pooled lists peak together, and Unity's collector does not return heap space.
 
+**Final smoke runs.** These ran in the development player, 1600×900 windowed, with the art tour. The 21:9 run was 1680×720 without the art tour.
+
+| Frame cap | Average fps | Scripted peak AGL / ground speed | Errors | Effects diagnostics | Result |
+| --- | --- | --- | --- | --- | --- |
+| 30 | 29.7 | 25.47 m / 3.56 m/s | 0 | all passed | pass |
+| 60 | 59.3 | 25.45 m / 3.56 m/s | 0 | all passed | pass |
+| 144 | 141.7 | 25.42 m / 3.56 m/s | 0 | all passed | pass |
+| 60, 21:9 | 58.8 | 25.47 m / 3.56 m/s | 0 | — | pass |
+
+The native crash seen once at 144 fps in phase 3 did not recur.
+
+The art tour now opens with a real autopilot cruise toward the farthest pad (`09a-cruise.png`), with the chase camera, HUD and chart as a player sees them. The documentation screenshots were refreshed from these runs. The review found one HUD bug: the collective gauge read 0% under the autopilot. It now shows the collective the aircraft flies, which in normal play is the pilot's lever.
+
+**CI.** The workflow is pushed and runs on every push. Without license secrets, its first job posts a notice and the test and build jobs are skipped, so the run stays green (run 36267519362). The runners are pinned to Ubuntu 24.04, ahead of GitHub moving `ubuntu-latest` to Ubuntu 26 on 19 October 2026.
+
+**Tests.** **120 EditMode** and **63 PlayMode** tests passed.
+
 **Release and development builds.**
 - **Release by default.** Builds are release builds.
 - **Development variant.** `Tools/Unity.ps1 WindowsDev` builds `Builds/Windows-Development`, which `Tools/Smoke.ps1` runs.

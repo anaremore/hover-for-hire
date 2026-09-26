@@ -4,7 +4,7 @@ A single-player helicopter delivery game and computer control practice sandbox. 
 
 ![Flight over Port Meridian](Docs/Screenshots/flight.png)
 
-Version **0.2.0**, verified on 8 September 2026: **89 automated tests passed**, with Windows flight/effects and 16:9/ultrawide visual checks. Native macOS/Linux playtesting remains outstanding. [Download desktop builds](https://github.com/anaremore/hover-for-hire/releases/tag/v0.2.0) · [Release notes](Docs/Release-0.2.0.md).
+Version **0.3.0**, verified on 26 September 2026: **183 automated tests passed** (120 EditMode, 63 PlayMode), and Windows smoke flights at 30, 60 and 144 fps with screenshot review. Native macOS/Linux playtesting remains outstanding. [Release notes](Docs/Release-0.3.0.md) · [Desktop builds](https://github.com/anaremore/hover-for-hire/releases) · [0.2.0 notes](Docs/Release-0.2.0.md).
 
 ## Quick start
 

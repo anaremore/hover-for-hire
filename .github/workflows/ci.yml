@@ -19,7 +19,7 @@ permissions:
 jobs:
   license:
     name: Unity license
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       available: ${{ steps.check.outputs.available }}
     steps:
@@ -40,7 +40,7 @@ jobs:
     name: Tests (${{ matrix.testMode }})
     needs: license
     if: needs.license.outputs.available == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -74,7 +74,7 @@ jobs:
     name: Build (${{ matrix.name }})
     needs: [license, test]
     if: needs.license.outputs.available == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:

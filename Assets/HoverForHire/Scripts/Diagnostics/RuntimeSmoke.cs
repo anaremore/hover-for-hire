@@ -176,6 +176,25 @@ namespace HoverForHire
         }
         IEnumerator Tour()
         {
+            // A real cruise toward the farthest pad first, as the player sees it: chase camera, HUD and chart.
+            Vector3 start = game.Zones[0].transform.position, farthest = start;
+            foreach (LandingZone zone in game.Zones)
+                if (Vector3.Distance(zone.transform.position, start) > Vector3.Distance(farthest, start))
+                    farthest = zone.transform.position;
+            var cruise = gameObject.AddComponent<Autopilot>();
+            cruise.Aircraft = game.Aircraft;
+            game.Aircraft.InputSource = cruise;
+            cruise.FlyTo(farthest);
+            float until = Time.time + 45;
+            while (!(cruise.Current == Autopilot.Phase.Cruise && game.Aircraft.GroundSpeed > 16f) && cruise.Current < Autopilot.Phase.Approach
+                && !game.Aircraft.Crashed && Time.time < until)
+                yield return null;
+            yield return Capture("09a-cruise.png");
+            game.Aircraft.InputSource = this;
+            Command = PilotCommand.Neutral;
+            Destroy(cruise);
+            game.Aircraft.ResetAt(start + Vector3.up * 1.55f, Quaternion.identity);
+            yield return new WaitForSeconds(1);
             // Fixed photo viewpoints only run after the actual physics smoke result is saved.
             var hud = game.GetComponent<FlightHUD>();
             hud.SendMessage("SetPause", false);

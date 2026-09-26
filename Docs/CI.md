@@ -2,7 +2,7 @@
 
 `.github/workflows/ci.yml` runs on every push to `main`, on pull requests, and on demand from the Actions tab. It uses [GameCI](https://game.ci) and runs two jobs:
 * **Tests:** EditMode and PlayMode, with results uploaded as artifacts.
-* **Builds:** release builds for Windows, macOS and Linux. Each goes through the project's own build method (`ProjectSetup.BuildWindows` / `BuildMac` / `BuildLinux`) and is uploaded as an artifact for 14 days. All three platforms build on Linux runners, since the project uses the Mono scripting backend.
+* **Builds:** release builds for Windows, macOS and Linux. Each goes through the project's own build method (`ProjectSetup.BuildWindows` / `BuildMac` / `BuildLinux`) and is uploaded as an artifact for 14 days. All three platforms build on Linux runners (pinned to Ubuntu 24.04), since the project uses the Mono scripting backend.
 
 ## What the repository owner needs to add
 

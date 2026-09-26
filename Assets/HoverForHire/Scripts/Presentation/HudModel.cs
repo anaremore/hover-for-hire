@@ -207,7 +207,8 @@ namespace HoverForHire
 
         private void RefreshPower(HelicopterController aircraft)
         {
-            Collective = hud.Input.Command.Collective;
+            // What the aircraft flies: the pilot's lever in normal play, and right under any other input source.
+            Collective = aircraft.RawCommand.Collective;
             HoverCollective = aircraft.HoverCollective;
             GroundEffectShown = aircraft.Realism.GroundEffect && aircraft.HoverCollectiveHere < HoverCollective - 0.002f;
             HoverCollectiveInGroundEffect = aircraft.HoverCollectiveHere;
