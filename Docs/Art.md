@@ -17,9 +17,19 @@ Maps live in `Assets/HoverForHire/Resources/Art/Textures`. The terrain shader bl
 
 Lighting uses four cascaded soft sun shadows, a sky reflection probe, ACES tonemapping and restrained bloom. The custom sky and water shaders are written for URP and the three desktop graphics backends.
 
+## Sound
+
+All aircraft sound is synthesized in real time by `RotorSoundSynth` on the audio thread; no recordings are included. The layers follow the flight model:
+* **Blade-pass pulses:** four blades at 395 rpm give a 26 Hz line with harmonics. They are low-passed into the rotor's "whop", with band-passed blade swish gated at the same rate. Pitch follows rotor RPM; level follows rotor load.
+* **Blade slap:** an impulsive crack at every blade pass. It is driven by blade-vortex interaction in a moderate descent at 6–40 m/s, by a vortex ring, and by high load (pull-ups, steep turns, flares).
+* **Turbine:** 4.1 and 6.2 kHz compressor tones and a hiss. After an engine failure they run down over a few seconds.
+* **Other layers:** main-gearbox mesh whine; airflow noise that grows and brightens with airspeed and turbulence; skid scrape; a pulsed 520 Hz low-rotor-RPM horn.
+
+Outside, the sound comes from the aircraft as a positional source. In the cockpit it is 2D and low-passed, with more rotor and gearbox and less turbine. The Flight Desk ducks it. The touchdown thump and service chime are short synthesized one-shots.
+
 ## Landing and impact effects
 
-Rotor wash samples the surface below the aircraft and follows rotor speed, collective and distance from the surface. Pavement gets light gray grit, natural ground gets tan dust, and water gets mist. These particles are cosmetic; aerodynamic ground effect remains deferred.
+Rotor wash samples the surface below the aircraft and follows rotor speed, collective and distance from the surface. Pavement gets light gray grit, natural ground gets tan dust, and water gets mist. These particles are cosmetic (ground effect is modeled separately in the flight model), and the wind carries them downwind.
 
 Contact events carry the incoming normal speed, aircraft mass, position and direction. Increasing impact severity adds sparks, smoke and broken parts. A fireball requires a dry impact of at least **20 m/s** and **180 kJ** of normal impact energy. Water suppresses fire and adds spray; the crashed Rigidbody continues sinking. Slow tip-overs produce a grounded wreck without an explosion. This is a game effect classification, not a fuel or structural-failure simulation.
 

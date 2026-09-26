@@ -43,9 +43,12 @@ namespace HoverForHire
             everCrashed|=game.Aircraft.Crashed;
             measurementStart=Time.unscaledTime;measuredFrames=0;
             yield return Capture("01-home.png");
+            // Record the listener's mix through the climb and the engine failure for offline sound analysis.
+            var tap=game.CameraRig.gameObject.AddComponent<AudioTap>();tap.Begin(10);
             Command=new PilotCommand(Vector2.zero,0,.49f);
             game.Input.ResetCommand(.49f);
             yield return new WaitForSeconds(8);
+            tap.Save(Path.Combine(output,"audio-climb.wav"));
             yield return Capture("02-climb.png");
             Command=new PilotCommand(new Vector2(0,.12f),0,.47f);
             game.Input.ResetCommand(.47f);
@@ -74,13 +77,13 @@ namespace HoverForHire
             hud.SelectMenuPage(4);yield return null;yield return Capture("08a-view-sound.png");
             // Realism: the autorotation drill starts in flight and fails the engine; capture the brief and the warning stack.
             hud.SendMessage("TogglePause");yield return null;
-            game.Missions.StartTraining(TrainingSession.Autorotation);
+            game.Missions.StartTraining(TrainingSession.Autorotation);tap.Begin(7);
             Command=new PilotCommand(Vector2.zero,0,game.Aircraft.HoverCollective*.95f);
             yield return new WaitForSeconds(1.5f);yield return Capture("08b-autorotation-drill.png");
             yield return new WaitForSeconds(2.5f);
             bool engineFailed=game.Aircraft.EngineFailed&&!game.Aircraft.Crashed;
             Command=new PilotCommand(Vector2.zero,0,.2f);
-            yield return new WaitForSeconds(1);yield return Capture("08c-engine-failure.png");
+            yield return new WaitForSeconds(1);tap.Save(Path.Combine(output,"audio-autorotation.wav"));yield return Capture("08c-engine-failure.png");
             // Crosswind drill in aviation units: wind indicator, hover display and unit conversion in one frame.
             UnitSystem units=hud.Settings.Units;hud.SetUnits(UnitSystem.Aviation);
             game.Missions.StartTraining(TrainingSession.Crosswind);Command=PilotCommand.Neutral;

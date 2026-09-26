@@ -47,6 +47,13 @@ If setup assets ever need regeneration, use **Hover for Hire → Prepare project
   - a heading-up hover display that replaces the chart near pads, showing drift, drift trend, a service-limit ring that turns green, and the pad's position.
 
   Every readout, objective and hint follows the chosen Metric or Aviation units.
+- Real-time synthesized helicopter sound driven by the flight model:
+  - blade-pass rotor pulses and swish that follow rotor RPM and load;
+  - blade slap in descending approaches, vortex ring and high load;
+  - turbine whine that runs down after an engine failure;
+  - gearbox, airflow, skid scrape and a low-rotor-RPM horn.
+
+  It is positional outside and muffled in the cockpit.
 - Surface-aware landing rotor wash, dust, sparks, smoke, water spray, graded crash debris, high-energy explosions and camera shake. Reset restores aircraft parts and clears effects.
 
 ## Controls

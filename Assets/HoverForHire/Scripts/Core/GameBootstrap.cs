@@ -29,7 +29,7 @@ namespace HoverForHire
             IslandAtmosphere.ConfigureCamera(camera);
             CameraRig=cameraObject.AddComponent<ChaseCamera>();CameraRig.Target=go.transform;CameraRig.Input=Input;CameraRig.CockpitMount=visual.CockpitMount;
             Missions=gameObject.AddComponent<MissionDirector>();Missions.Aircraft=Aircraft;Missions.Zones=Zones;Missions.Wind=Wind.Field;
-            var audio=go.AddComponent<FlightAudio>();audio.Aircraft=Aircraft;
+            var audio=go.AddComponent<FlightAudio>();audio.Aircraft=Aircraft;audio.CameraRig=CameraRig;
             var effects=go.AddComponent<AircraftEffects>();effects.Initialize(Aircraft,audio);
             var hud=gameObject.AddComponent<FlightHUD>();hud.Game=this;hud.Audio=audio;
             Recorder=go.AddComponent<FlightRecorder>();Recorder.Aircraft=Aircraft;Recorder.Missions=Missions;

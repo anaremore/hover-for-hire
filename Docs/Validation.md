@@ -35,6 +35,26 @@ The pilot's settings (assists, realism, units, volume, first launch) now live un
 
 The re-run confirmed the fixes: IGE and HOVER labels either side of their marks, and "hold 72–90 km/h, flare near 30 m".
 
+**Sound.** The rotor, turbine, gearbox, airflow, skid and horn sounds are synthesized in real time (`RotorSoundSynth`). `RotorSoundTests` (6 tests) check that:
+- the 26.3 Hz blade-pass line moves with rotor speed;
+- slap adds more than 1.8× the 1–4 kHz energy;
+- airflow noise grows with airspeed;
+- the turbine runs down after a failure;
+- the output is bounded, deterministic and identical on every channel.
+
+The smoke run now records the listener's final mix (`AudioTap`) through the scripted climb and the autorotation drill:
+
+| Measurement | Result |
+| --- | --- |
+| Strongest low line in the climb | 26.40 Hz (blade pass is 26.33 Hz) |
+| Turbine line | 4.02 kHz |
+| Turbine line after the engine failure | falls 4,000× in power |
+| 520 Hz low-rotor horn after the failure | rises 400× |
+| Blade line after the failure | drops to 24.7 Hz (rotor at 94%, as the HUD showed) |
+| Levels | RMS 0.12, peak 0.52 |
+
+Whether it sounds good is a human judgement still to make. Totals are now **109 EditMode** and **57 PlayMode** tests.
+
 ## Arma-style realism (0.3 development, phase 3)
 
 **26 September 2026.** Realism is optional. It comes as three presets (Relaxed / Realistic / Expert) plus per-effect toggles, covering:
