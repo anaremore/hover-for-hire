@@ -13,13 +13,33 @@ namespace HoverForHire
         public MonoBehaviour InputSource;
         public Rigidbody Body;
         public AssistSettings Assists = new AssistSettings();
+        /// <summary>Optional air-mass motion. Null is calm air.</summary>
+        public IWindSource Wind;
 
         public bool Grounded => supports.Count > 0 && (Body == null ? transform.up : Body.rotation * Vector3.up).y > 0.4f;
         public bool Crashed { get; private set; }
         /// <summary>Vertical clearance beneath the fuselage origin, less upright skid clearance.</summary>
         public float AltitudeAGL { get; private set; }
         public float GroundSpeed => Body == null ? 0f : Vector3.ProjectOnPlane(Body.linearVelocity, Vector3.up).magnitude;
-        public float Airspeed => Body == null ? 0f : Body.linearVelocity.magnitude; // Calm atmosphere in this slice.
+        /// <summary>Wind sampled at the aircraft during the latest physics step (world axes, m/s).</summary>
+        public Vector3 CurrentWind { get; private set; }
+        /// <summary>Velocity relative to the surrounding air (world axes). Equals ground velocity in calm air.</summary>
+        public Vector3 AirVelocity => Body == null ? Vector3.zero : Body.linearVelocity - CurrentWind;
+        /// <summary>Magnitude of the 3D velocity through the air, including vertical motion.</summary>
+        public float Airspeed => AirVelocity.magnitude;
+        /// <summary>Angle between the nose and the horizontal air velocity; positive when air arrives from the right.</summary>
+        public float SideslipDegrees
+        {
+            get
+            {
+                if (Body == null) return 0f;
+                Vector3 local = Quaternion.Inverse(Body.rotation) * AirVelocity;
+                return new Vector2(local.x, local.z).sqrMagnitude < 0.25f ? 0f : Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg;
+            }
+        }
+        /// <summary>Collective that balances the current weight in level, still air, out of ground effect.</summary>
+        public float HoverCollective => Tuning == null || Body == null ? 0f :
+            FlightMath.HoverCollective(Body.mass, Physics.gravity.y, Tuning);
         public float VerticalSpeed => Body == null ? 0f : Body.linearVelocity.y;
         public float Heading => Body == null ? transform.eulerAngles.y : Body.rotation.eulerAngles.y;
         public float LiftNewtons { get; private set; }
@@ -83,7 +103,9 @@ namespace HoverForHire
             if (Body != null)
             {
                 Body.mass = FlightMath.Mass(PayloadKg, Tuning);
-                Body.ResetInertiaTensor();
+                // Explicit moments: adding or reshaping colliders never changes handling.
+                Body.inertiaTensor = FlightMath.Inertia(Body.mass, Tuning);
+                Body.inertiaTensorRotation = Quaternion.identity;
                 Body.centerOfMass = Tuning.CenterOfMass;
             }
         }
@@ -100,22 +122,28 @@ namespace HoverForHire
             Quaternion rotation = Body.rotation;
             Quaternion inverseRotation = Quaternion.Inverse(rotation);
             Vector3 localAngular = inverseRotation * Body.angularVelocity;
+            CurrentWind = Wind != null ? Wind.WindAt(Body.position) : Vector3.zero;
+            Vector3 airVelocity = Body.linearVelocity - CurrentWind;
+            Vector3 localAir = inverseRotation * airVelocity;
+            Vector3 inertia = Body.inertiaTensor;
             float rotorReactionNm = LiftNewtons * Mathf.Max(0f, Tuning.RotorTorqueArmMeters);
             AssistedCommand = solver.Step(RawCommand, localAngular, inverseRotation * Vector3.up,
-                rotorReactionNm, Tuning, Assists, dt);
+                rotorReactionNm, localAir, inertia, Tuning, Assists, dt);
             RotorSpeed01 = Mathf.MoveTowards(RotorSpeed01, Crashed ? 0f : 1f, dt * (Crashed ? 0.35f : 1f));
             LiftNewtons = FlightMath.Lift(AssistedCommand.Collective, Tuning) * RotorSpeed01 * RotorSpeed01;
 
             Vector3 localThrust = FlightMath.LocalThrustDirection(AssistedCommand.Cyclic, Tuning.RotorDiskTiltDegrees);
             Body.AddForce(rotation * localThrust * LiftNewtons, ForceMode.Force);
+            Body.AddForce(Vector3.up * FlightMath.HeaveDamping(airVelocity.y, RotorSpeed01, Tuning), ForceMode.Force);
             float authority = RotorSpeed01 * RotorSpeed01;
             Vector3 controlTorque = new Vector3(AssistedCommand.Cyclic.y * Tuning.PitchTorqueNm,
                 AssistedCommand.Yaw * Tuning.YawTorqueNm, -AssistedCommand.Cyclic.x * Tuning.RollTorqueNm) * authority;
             controlTorque.y += LiftNewtons * Mathf.Max(0f, Tuning.RotorTorqueArmMeters);
+            controlTorque += FlightMath.RotorRateDamping(localAngular, inertia, Tuning.RotorRateDampingPerSecond, authority);
+            controlTorque.y += FlightMath.WeathervaneYawTorque(localAir, Tuning.WeathervaneCoefficient);
             Body.AddRelativeTorque(controlTorque, ForceMode.Force);
 
-            Vector3 localVelocity = inverseRotation * Body.linearVelocity;
-            Body.AddRelativeForce(FlightMath.AerodynamicDrag(localVelocity, Tuning.LinearDrag, Tuning.QuadraticDrag), ForceMode.Force);
+            Body.AddRelativeForce(FlightMath.AerodynamicDrag(localAir, Tuning.LinearDrag, Tuning.QuadraticDrag), ForceMode.Force);
             Body.AddRelativeTorque(FlightMath.AerodynamicDrag(localAngular, Tuning.AngularDrag, Vector3.zero), ForceMode.Force);
         }
 

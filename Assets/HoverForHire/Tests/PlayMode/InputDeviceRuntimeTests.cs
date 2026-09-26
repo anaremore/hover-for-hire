@@ -106,7 +106,11 @@ namespace HoverForHire.Tests
         {
             var held = new KeyboardState(Key.W, Key.D, Key.E, Key.LeftShift);
             for (int i = 0; i < 150; i++) Step(held);
-            Assert.That(_input.Command.Collective, Is.EqualTo(0.6f).Within(0.0001f), DeviceDiagnostic);
+            // A held key trims finely first, then ramps to the full rate (exact, frame-rate independent integral).
+            InputPreferences s = _input.Settings;
+            float expected = FlightInputMath.RampedArea(150 * Frame, s.CollectiveFineRate, s.CollectiveRate, s.CollectiveRampSeconds);
+            Assert.That(_input.Command.Collective, Is.EqualTo(expected).Within(0.0005f), DeviceDiagnostic);
+            Assert.That(expected, Is.InRange(0.55f, 0.6f));
             Assert.That(_input.Command.Cyclic.x, Is.GreaterThan(0.65f));
             Assert.That(_input.Command.Cyclic.y, Is.GreaterThan(0.65f));
             Assert.That(_input.Command.Yaw, Is.EqualTo(1f));
@@ -133,6 +137,30 @@ namespace HoverForHire.Tests
             Assert.That(_input.Command.Cyclic, Is.EqualTo(Vector2.zero));
             Step(gamepad: new GamepadState { leftTrigger = 1f });
             Assert.That(_input.Command.Collective, Is.EqualTo(collective - 0.24f * Frame).Within(0.0001f));
+        }
+
+        [Test]
+        public void KeyTapTrimsCollectiveFinelyAndPedalTapIsPartial()
+        {
+            Step(new KeyboardState(Key.LeftShift, Key.E));
+            float tap = _input.Command.Collective;
+            Assert.That(tap, Is.GreaterThan(0f).And.LessThan(0.0012f), "One key frame is a fine trim step.");
+            Assert.That(_input.Command.Yaw, Is.InRange(0.29f, 0.4f), "A pedal tap starts near the configured tap strength.");
+            Step();
+            Assert.That(_input.Command.Collective, Is.EqualTo(tap), "Collective holds its setting on release.");
+            Assert.That(_input.Command.Yaw, Is.Zero);
+        }
+
+        [Test]
+        public void SimPedalLayoutGivesAnalogPedalsAndShoulderCollective()
+        {
+            FlightInput.ApplyGamepadLayout(_input.ActionAsset, GamepadLayout.SimPedals);
+            Step(gamepad: new GamepadState { leftTrigger = 0.4f });
+            Assert.That(_input.Command.Yaw, Is.EqualTo(-0.4f).Within(0.0001f), "Analog triggers pass pedal pressure straight through.");
+            for (int i = 0; i < 60; i++) Step(gamepad: new GamepadState().WithButton(GamepadButton.RightShoulder));
+            InputPreferences s = _input.Settings;
+            float expected = FlightInputMath.RampedArea(60 * Frame, s.CollectiveFineRate, s.CollectiveRate, s.CollectiveRampSeconds);
+            Assert.That(_input.Command.Collective, Is.EqualTo(expected).Within(0.0005f), "Shoulder collective is digital and ramps.");
         }
 
         [Test]

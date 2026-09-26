@@ -5,6 +5,8 @@ namespace HoverForHire
 {
     public enum MouseCyclicMode { Relative, VirtualJoystick }
     public enum FreeLookCyclicMode { Hold, ReturnToCenter }
+    /// <summary>Classic: triggers adjust collective, shoulders yaw. SimPedals: analog triggers are pedals, shoulders adjust collective.</summary>
+    public enum GamepadLayout { Classic, SimPedals }
 
     [Serializable]
     public sealed class InputPreferences
@@ -19,6 +21,14 @@ namespace HoverForHire
         public bool InvertRoll;
         [Range(2f, 30f)] public float KeyboardResponse = 12f;
         [Range(0.05f, 1f)] public float CollectiveRate = 0.24f;
+        [Tooltip("Digital collective (keys, shoulder buttons) starts at this rate per second for fine trim, " +
+            "then ramps to CollectiveRate while held. Analog triggers always use pressure × CollectiveRate.")]
+        [Range(0.01f, 0.5f)] public float CollectiveFineRate = 0.06f;
+        [Range(0f, 1.5f)] public float CollectiveRampSeconds = 0.3f;
+        [Tooltip("Digital pedals (keys, shoulder buttons) start at this fraction of full deflection and ramp to full while held.")]
+        [Range(0.05f, 1f)] public float YawFineFraction = 0.3f;
+        [Range(0f, 1.5f)] public float YawRampSeconds = 0.35f;
+        public GamepadLayout GamepadLayout = GamepadLayout.Classic;
         public bool UseAbsoluteCollective;
         public bool AbsoluteAxisSigned = true;
         public bool InvertAbsoluteCollective;
@@ -42,6 +52,10 @@ namespace HoverForHire
             ResponseCurve = Valid(ResponseCurve, 0.5f, 3f, 1.35f);
             KeyboardResponse = Valid(KeyboardResponse, 2f, 30f, 12f);
             CollectiveRate = Valid(CollectiveRate, 0.05f, 1f, 0.24f);
+            CollectiveFineRate = Valid(CollectiveFineRate, 0.01f, 0.5f, 0.06f);
+            CollectiveRampSeconds = Valid(CollectiveRampSeconds, 0f, 1.5f, 0.3f);
+            YawFineFraction = Valid(YawFineFraction, 0.05f, 1f, 0.3f);
+            YawRampSeconds = Valid(YawRampSeconds, 0f, 1.5f, 0.35f);
             LookSensitivity = Valid(LookSensitivity, 0.02f, 0.5f, 0.13f);
             GamepadLookSpeed = Valid(GamepadLookSpeed, 30f, 240f, 115f);
             RecenterDelay = Valid(RecenterDelay, 0f, 5f, 1.1f);
@@ -52,6 +66,7 @@ namespace HoverForHire
             CameraSmoothing = Valid(CameraSmoothing, 0.02f, 0.8f, 0.12f);
             if (!Enum.IsDefined(typeof(MouseCyclicMode), MouseMode)) MouseMode = MouseCyclicMode.Relative;
             if (!Enum.IsDefined(typeof(FreeLookCyclicMode), FreeLookBehavior)) FreeLookBehavior = FreeLookCyclicMode.Hold;
+            if (!Enum.IsDefined(typeof(GamepadLayout), GamepadLayout)) GamepadLayout = GamepadLayout.Classic;
         }
 
         private static float Valid(float value, float min, float max, float fallback) =>

@@ -11,6 +11,7 @@ namespace HoverForHire
         public MissionDirector Missions {get;private set;}
         public ChaseCamera CameraRig {get;private set;}
         public LandingZone[] Zones {get;private set;}
+        public FlightRecorder Recorder {get;private set;}
         void Awake()
         {
             Instance=this;Time.fixedDeltaTime=.02f;Time.maximumDeltaTime=.1f;Application.targetFrameRate=120;
@@ -28,6 +29,8 @@ namespace HoverForHire
             var audio=go.AddComponent<FlightAudio>();audio.Aircraft=Aircraft;
             var effects=go.AddComponent<AircraftEffects>();effects.Initialize(Aircraft,audio);
             var hud=gameObject.AddComponent<FlightHUD>();hud.Game=this;hud.Audio=audio;
+            Recorder=go.AddComponent<FlightRecorder>();Recorder.Aircraft=Aircraft;Recorder.Missions=Missions;
+            if(FlightRecorder.RequestedOnCommandLine())Recorder.StartRecording();
         }
         void FixedUpdate()
         {

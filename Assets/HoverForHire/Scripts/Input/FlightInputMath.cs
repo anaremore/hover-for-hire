@@ -52,6 +52,39 @@ namespace HoverForHire
         public static float IntegrateCollective(float current, float increase, float decrease, float rate, float dt) =>
             Mathf.Clamp01(current + (Mathf.Clamp01(increase) - Mathf.Clamp01(decrease)) * Mathf.Max(0f, rate) * Mathf.Max(0f, dt));
 
+        /// <summary>
+        /// Travel of a held digital control over one frame, from heldBefore to heldBefore + dt seconds.
+        /// The rate rises smoothly from fineRate to coarseRate over rampSeconds; the exact integral keeps
+        /// the result independent of frame rate, so a short tap trims finely and a long hold still moves quickly.
+        /// </summary>
+        public static float RampedTravel(float heldBefore, float dt, float fineRate, float coarseRate, float rampSeconds)
+        {
+            float start = Mathf.Max(0f, heldBefore);
+            return Mathf.Max(0f, RampedArea(start + Mathf.Max(0f, dt), fineRate, coarseRate, rampSeconds)
+                - RampedArea(start, fineRate, coarseRate, rampSeconds));
+        }
+
+        /// <summary>Integral of the ramped rate from 0 to t seconds held.</summary>
+        public static float RampedArea(float t, float fineRate, float coarseRate, float rampSeconds)
+        {
+            float fine = Mathf.Max(0f, fineRate), coarse = Mathf.Max(fine, coarseRate), held = Mathf.Max(0f, t);
+            if (rampSeconds <= 0.0001f) return coarse * held;
+            float u = Mathf.Clamp01(held / rampSeconds);
+            // Smoothstep 3u² − 2u³ integrates to u³ − u⁴/2 over the ramp.
+            float area = fine * Mathf.Min(held, rampSeconds) + (coarse - fine) * rampSeconds * (u * u * u - 0.5f * u * u * u * u);
+            if (held > rampSeconds) area += coarse * (held - rampSeconds);
+            return area;
+        }
+
+        /// <summary>Deflection of a held digital control: fineFraction on a tap, rising smoothly to full.</summary>
+        public static float RampedLevel(float heldSeconds, float fineFraction, float rampSeconds)
+        {
+            float fine = Mathf.Clamp01(fineFraction);
+            if (rampSeconds <= 0.0001f) return 1f;
+            float u = Mathf.Clamp01(Mathf.Max(0f, heldSeconds) / rampSeconds);
+            return u >= 1f ? 1f : fine + (1f - fine) * u * u * (3f - 2f * u);
+        }
+
         public static float AbsoluteCollective(float axis, bool signed, bool inverted)
         {
             float result = Mathf.Clamp01(signed ? (axis + 1f) * 0.5f : axis);

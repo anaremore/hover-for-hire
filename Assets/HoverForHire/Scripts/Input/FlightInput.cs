@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 
 namespace HoverForHire
 {
@@ -33,14 +34,17 @@ namespace HoverForHire
         public event Action DebugRequested;
         public event Action AssistRequested;
         public event Action HoverRequested;
+        public event Action RecordRequested;
 
         private InputActionAsset _asset;
         private InputActionMap _map;
         private readonly List<InputAction> _actions = new List<InputAction>();
-        private InputAction _keyboard, _gamepad, _mouse, _look, _freeLook, _yawLeft, _yawRight;
+        private InputAction _keyboard, _gamepad, _mouse, _look, _freeLook, _yawLeft, _yawRight, _yawAxis;
         private InputAction _increase, _decrease, _absolute;
         private Vector2 _mouseCyclic, _keyboardCyclic;
         private float _collective;
+        // Seconds each digital control has been held; drives the fine-then-coarse ramps.
+        private float _increaseHeld, _decreaseHeld, _yawLeftHeld, _yawRightHeld;
         private bool _skipMouseFrame = true;
         private InputActionRebindingExtensions.RebindingOperation _rebind;
 
@@ -51,7 +55,7 @@ namespace HoverForHire
             foreach (InputAction action in _map.actions) _actions.Add(action);
             _keyboard = _map["KeyboardCyclic"]; _gamepad = _map["GamepadCyclic"];
             _mouse = _map["MouseCyclic"]; _look = _map["CameraLook"]; _freeLook = _map["FreeLook"];
-            _yawLeft = _map["YawLeft"]; _yawRight = _map["YawRight"];
+            _yawLeft = _map["YawLeft"]; _yawRight = _map["YawRight"]; _yawAxis = _map["YawAxis"];
             _increase = _map["CollectiveIncrease"]; _decrease = _map["CollectiveDecrease"];
             _absolute = _map["AbsoluteCollective"];
             if (PersistenceEnabled) LoadSettings();
@@ -112,6 +116,7 @@ namespace HoverForHire
             if (_map["RecenterView"].WasPressedThisFrame()) RecenterRequested?.Invoke();
             if (_map["Interact"].WasPressedThisFrame()) InteractRequested?.Invoke();
             if (_map["Debug"].WasPressedThisFrame()) DebugRequested?.Invoke();
+            if (_map["RecordFlight"].WasPressedThisFrame()) RecordRequested?.Invoke();
             if (_map["AssistPreset"].WasPressedThisFrame()) AssistRequested?.Invoke();
             if (_map["HoverHold"].WasPressedThisFrame()) HoverRequested?.Invoke();
             if (_map["RecenterCyclic"].WasPressedThisFrame()) RecenterCyclic();
@@ -135,13 +140,46 @@ namespace HoverForHire
             Vector2 gamepadCommand = FlightInputMath.Shape(_gamepad.ReadValue<Vector2>(), Settings.Deadzone, Settings.ResponseCurve);
             Vector2 cyclic = FlightInputMath.Combine(mouseCommand, _keyboardCyclic, gamepadCommand);
             if (Settings.UseAbsoluteCollective && _absolute.controls.Count > 0)
+            {
                 _collective = FlightInputMath.AbsoluteCollective(_absolute.ReadValue<float>(),
                     Settings.AbsoluteAxisSigned, Settings.InvertAbsoluteCollective);
+                _increaseHeld = _decreaseHeld = 0f;
+            }
             else
-                _collective = FlightInputMath.IntegrateCollective(_collective, _increase.ReadValue<float>(),
-                    _decrease.ReadValue<float>(), Settings.CollectiveRate, dt);
-            float yaw = Mathf.Clamp(_yawRight.ReadValue<float>() - _yawLeft.ReadValue<float>(), -1f, 1f);
-            Command = new PilotCommand(cyclic, yaw, _collective);
+                _collective = Mathf.Clamp01(_collective + CollectiveTravel(_increase, ref _increaseHeld, dt)
+                    - CollectiveTravel(_decrease, ref _decreaseHeld, dt));
+            float yaw = PedalLevel(_yawRight, ref _yawRightHeld, dt) - PedalLevel(_yawLeft, ref _yawLeftHeld, dt)
+                + _yawAxis.ReadValue<float>();
+            Command = new PilotCommand(cyclic, Mathf.Clamp(yaw, -1f, 1f), _collective);
+        }
+
+        /// <summary>Keys and gamepad buttons are digital (bit state); triggers and axes are analog.</summary>
+        private static bool IsDigital(InputAction action)
+        {
+            InputControl control = action.activeControl;
+            return control != null && control.stateBlock.format == InputStateBlock.FormatBit;
+        }
+
+        /// <summary>Analog pressure moves collective proportionally; a held digital control trims finely, then ramps.</summary>
+        private float CollectiveTravel(InputAction action, ref float held, float dt)
+        {
+            float value = Mathf.Clamp01(action.ReadValue<float>());
+            if (value <= 0.001f) { held = 0f; return 0f; }
+            if (!IsDigital(action)) { held = 0f; return value * Settings.CollectiveRate * dt; }
+            float travel = FlightInputMath.RampedTravel(held, dt, Settings.CollectiveFineRate,
+                Settings.CollectiveRate, Settings.CollectiveRampSeconds);
+            held += dt;
+            return travel;
+        }
+
+        /// <summary>Analog pedals pass through; a held digital pedal starts partial and rises to full deflection.</summary>
+        private float PedalLevel(InputAction action, ref float held, float dt)
+        {
+            float value = Mathf.Clamp01(action.ReadValue<float>());
+            if (value <= 0.001f) { held = 0f; return 0f; }
+            if (!IsDigital(action)) { held = 0f; return value; }
+            held += dt;
+            return FlightInputMath.RampedLevel(held, Settings.YawFineFraction, Settings.YawRampSeconds);
         }
 
         public void SetPaused(bool paused)
@@ -168,6 +206,7 @@ namespace HoverForHire
         {
             RecenterCyclic();
             _keyboardCyclic = Vector2.zero;
+            _increaseHeld = _decreaseHeld = _yawLeftHeld = _yawRightHeld = 0f;
             _collective = Mathf.Clamp01(collective);
             Command = new PilotCommand(Vector2.zero, 0f, _collective);
         }
@@ -249,6 +288,40 @@ namespace HoverForHire
 
         public void CancelRebind() { _rebind?.Cancel(); }
 
+        private static readonly (string Action, string Classic, string SimPedals)[] GamepadLayoutBindings =
+        {
+            ("YawLeft", "<Gamepad>/leftShoulder", "<Gamepad>/leftTrigger"),
+            ("YawRight", "<Gamepad>/rightShoulder", "<Gamepad>/rightTrigger"),
+            ("CollectiveIncrease", "<Gamepad>/rightTrigger", "<Gamepad>/rightShoulder"),
+            ("CollectiveDecrease", "<Gamepad>/leftTrigger", "<Gamepad>/leftShoulder"),
+        };
+
+        /// <summary>
+        /// Switch gamepad pedals/collective between shoulders and analog triggers. Applied as ordinary
+        /// binding overrides, so the choice persists with other bindings and can still be customized.
+        /// </summary>
+        public void ApplyGamepadLayout(GamepadLayout layout)
+        {
+            CancelRebind();
+            ApplyGamepadLayout(_asset, layout);
+            Settings.GamepadLayout = layout;
+            SaveSettings();
+        }
+
+        public static void ApplyGamepadLayout(InputActionAsset asset, GamepadLayout layout)
+        {
+            foreach (var entry in GamepadLayoutBindings)
+            {
+                InputAction action = asset.FindAction(entry.Action, true);
+                for (int i = 0; i < action.bindings.Count; i++)
+                {
+                    if (action.bindings[i].path != entry.Classic) continue;
+                    if (layout == GamepadLayout.SimPedals) action.ApplyBindingOverride(i, entry.SimPedals);
+                    else action.RemoveBindingOverride(i);
+                }
+            }
+        }
+
         public static InputActionAsset CreateDefaultActions()
         {
             var asset = ScriptableObject.CreateInstance<InputActionAsset>();
@@ -262,6 +335,8 @@ namespace HoverForHire
             Add(map, "MouseCyclic", InputActionType.PassThrough, "Vector2", "<Mouse>/delta");
             Add(map, "YawLeft", InputActionType.Value, "Axis", "<Keyboard>/q", "<Gamepad>/leftShoulder");
             Add(map, "YawRight", InputActionType.Value, "Axis", "<Keyboard>/e", "<Gamepad>/rightShoulder");
+            // Signed pedal axis for rudder-pedal hardware; unbound by default and summed with the pedal buttons.
+            Add(map, "YawAxis", InputActionType.Value, "Axis", "");
             Add(map, "CollectiveIncrease", InputActionType.Value, "Axis", "<Keyboard>/leftShift", "<Gamepad>/rightTrigger");
             Add(map, "CollectiveDecrease", InputActionType.Value, "Axis", "<Keyboard>/leftCtrl", "<Gamepad>/leftTrigger");
             Add(map, "AbsoluteCollective", InputActionType.Value, "Axis", "");
@@ -274,6 +349,7 @@ namespace HoverForHire
             Add(map, "Reset", InputActionType.Button, "Button", "<Keyboard>/backspace", "<Gamepad>/select");
             Add(map, "Interact", InputActionType.Button, "Button", "<Keyboard>/enter", "<Gamepad>/buttonSouth");
             Add(map, "Debug", InputActionType.Button, "Button", "<Keyboard>/f1", "<Gamepad>/dpad/right");
+            Add(map, "RecordFlight", InputActionType.Button, "Button", "<Keyboard>/f3");
             Add(map, "AssistPreset", InputActionType.Button, "Button", "<Keyboard>/f2", "<Gamepad>/dpad/up");
             Add(map, "HoverHold", InputActionType.Button, "Button", "<Keyboard>/h", "<Gamepad>/buttonWest");
             Add(map, "MenuMove", InputActionType.Value, "Vector2", "<Gamepad>/dpad", "<Gamepad>/leftStick");

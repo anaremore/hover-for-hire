@@ -64,6 +64,71 @@ namespace HoverForHire.Tests
             Assert.That(FlightInputMath.IntegrateCollective(0.95f, 1f, 0f, 0.24f, 1f), Is.EqualTo(1f));
         }
 
+        [TestCase(30)]
+        [TestCase(60)]
+        [TestCase(144)]
+        public void HeldDigitalCollectiveTravelsTheSameDistanceAtEveryFrameRate(int fps)
+        {
+            float held = 0f, travel = 0f, dt = 1f / fps;
+            for (int i = 0; i < fps * 2; i++)
+            {
+                travel += FlightInputMath.RampedTravel(held, dt, 0.06f, 0.24f, 0.3f);
+                held += dt;
+            }
+            // Exact integral: full rate minus the area lost while ramping from the fine rate.
+            Assert.That(travel, Is.EqualTo(0.24f * 2f - 0.5f * 0.3f * (0.24f - 0.06f)).Within(0.0002f));
+            Assert.That(FlightInputMath.RampedArea(2f, 0.06f, 0.24f, 0.3f), Is.EqualTo(travel).Within(0.0002f));
+        }
+
+        [Test]
+        public void DigitalTapTrimsFinelyWhileLongHoldsKeepFullRate()
+        {
+            float oneFrame = FlightInputMath.RampedTravel(0f, 1f / 60f, 0.06f, 0.24f, 0.3f);
+            Assert.That(oneFrame, Is.LessThan(0.0012f), "A single 60 fps key frame should move collective about 0.1%, not 0.4%.");
+            Assert.That(FlightInputMath.RampedTravel(1f, 0.1f, 0.06f, 0.24f, 0.3f), Is.EqualTo(0.024f).Within(0.00001f));
+            Assert.That(FlightInputMath.RampedTravel(0f, 1f, 0.06f, 0.24f, 0f), Is.EqualTo(0.24f).Within(0.00001f), "No ramp is plain linear rate.");
+            Assert.That(FlightInputMath.RampedTravel(0.5f, 0f, 0.06f, 0.24f, 0.3f), Is.Zero);
+        }
+
+        [Test]
+        public void DigitalPedalStartsPartialAndReachesFullDeflection()
+        {
+            Assert.That(FlightInputMath.RampedLevel(0f, 0.3f, 0.35f), Is.EqualTo(0.3f).Within(0.0001f));
+            float previous = 0f;
+            for (float t = 0f; t <= 0.4f; t += 0.01f)
+            {
+                float level = FlightInputMath.RampedLevel(t, 0.3f, 0.35f);
+                Assert.That(level, Is.GreaterThanOrEqualTo(previous));
+                previous = level;
+            }
+            Assert.That(FlightInputMath.RampedLevel(0.35f, 0.3f, 0.35f), Is.EqualTo(1f));
+            Assert.That(FlightInputMath.RampedLevel(5f, 0.3f, 0.35f), Is.EqualTo(1f));
+            Assert.That(FlightInputMath.RampedLevel(0f, 0.3f, 0f), Is.EqualTo(1f), "No ramp means immediate full deflection.");
+        }
+
+        [Test]
+        public void SimPedalLayoutSwapsTriggersAndShouldersAndPersists()
+        {
+            InputActionAsset asset = FlightInput.CreateDefaultActions();
+            InputActionAsset restarted = FlightInput.CreateDefaultActions();
+            try
+            {
+                FlightInput.ApplyGamepadLayout(asset, GamepadLayout.SimPedals);
+                Assert.That(asset.FindAction("YawLeft").bindings[1].effectivePath, Is.EqualTo("<Gamepad>/leftTrigger"));
+                Assert.That(asset.FindAction("YawRight").bindings[1].effectivePath, Is.EqualTo("<Gamepad>/rightTrigger"));
+                Assert.That(asset.FindAction("CollectiveIncrease").bindings[1].effectivePath, Is.EqualTo("<Gamepad>/rightShoulder"));
+                Assert.That(asset.FindAction("CollectiveDecrease").bindings[1].effectivePath, Is.EqualTo("<Gamepad>/leftShoulder"));
+                Assert.That(asset.FindAction("YawLeft").bindings[0].effectivePath, Is.EqualTo("<Keyboard>/q"), "Keyboard pedals are unchanged.");
+                FlightInput.LoadBindingOverrides(restarted, FlightInput.SerializeBindingOverrides(asset));
+                Assert.That(restarted.FindAction("YawRight").bindings[1].effectivePath, Is.EqualTo("<Gamepad>/rightTrigger"));
+                FlightInput.ApplyGamepadLayout(asset, GamepadLayout.Classic);
+                Assert.That(asset.FindAction("YawLeft").bindings[1].effectivePath, Is.EqualTo("<Gamepad>/leftShoulder"));
+                Assert.That(asset.FindAction("CollectiveIncrease").bindings[1].hasOverrides, Is.False);
+                Assert.That(asset.FindAction("YawAxis"), Is.Not.Null, "Rudder-pedal hardware has its own axis binding.");
+            }
+            finally { Object.DestroyImmediate(asset); Object.DestroyImmediate(restarted); }
+        }
+
         [Test]
         public void AbsoluteCollectiveHandlesSignedUnsignedAndInvertedHardware()
         {
@@ -128,11 +193,15 @@ namespace HoverForHire.Tests
         [Test]
         public void PreferencesSanitizeCorruptNumbers()
         {
-            var settings = new InputPreferences { MouseSensitivity = float.NaN, CameraDistance = -100f, ResponseCurve = 50f };
+            var settings = new InputPreferences { MouseSensitivity = float.NaN, CameraDistance = -100f, ResponseCurve = 50f,
+                CollectiveFineRate = float.PositiveInfinity, YawFineFraction = -1f, GamepadLayout = (GamepadLayout)42 };
             settings.Sanitize();
             Assert.That(settings.MouseSensitivity, Is.EqualTo(0.0035f));
             Assert.That(settings.CameraDistance, Is.EqualTo(5f));
             Assert.That(settings.ResponseCurve, Is.EqualTo(3f));
+            Assert.That(settings.CollectiveFineRate, Is.EqualTo(0.06f));
+            Assert.That(settings.YawFineFraction, Is.EqualTo(0.05f));
+            Assert.That(settings.GamepadLayout, Is.EqualTo(GamepadLayout.Classic));
         }
     }
 }

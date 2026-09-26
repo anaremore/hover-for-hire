@@ -211,11 +211,15 @@ namespace HoverForHire.Tests
             HelicopterController manual = Create(height: 40f, preset: AssistPreset.Unassisted);
             assisted.Body.angularVelocity = Vector3.right * 0.6f;
             manual.Body.angularVelocity = Vector3.right * 0.6f;
-            Step(50);
+            // Rotor flapping damps both aircraft; the rate assist removes the motion much faster.
+            Step(10);
             float assistedPitchRate = Mathf.Abs(assisted.LocalAngularRatesDegrees.x);
             float manualPitchRate = Mathf.Abs(manual.LocalAngularRatesDegrees.x);
-            Assert.That(manualPitchRate, Is.GreaterThan(15f));
-            Assert.That(assistedPitchRate, Is.LessThan(manualPitchRate * 0.5f));
+            Assert.That(manualPitchRate, Is.GreaterThan(12f));
+            Assert.That(assistedPitchRate, Is.LessThan(manualPitchRate * 0.6f));
+            Step(40);
+            Assert.That(Mathf.Abs(manual.LocalAngularRatesDegrees.x), Is.LessThan(manualPitchRate * 0.5f),
+                "Unassisted still has physical rotor damping; it is not a frictionless body.");
         }
 
         [Test]

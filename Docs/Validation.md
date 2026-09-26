@@ -1,6 +1,33 @@
 # Validation and playtest checklist
 
-Status snapshot: **8 September 2026, Unity 6000.3.22f1**. The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
+Status snapshot: **26 September 2026, Unity 6000.3.22f1** (phase 1 of the 0.3 overhaul; the 0.2.0 and 0.1.0 sections below are kept as the baseline). The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
+
+## Flight-feel foundation (0.3 development, phase 1)
+
+**26 September 2026, Unity 6000.3.22f1.** This phase adds heave (inflow) damping, rotor pitch/roll/yaw damping with rate-loop feed-forward, tail-fin weathervaning, turn coordination in yaw stabilization, explicit inertia, fine-then-coarse digital collective/pedal ramps, a hover-power tick, the *Sim pedals* gamepad layout and a 50 Hz flight recorder. Each new physics term is a tuning value where zero restores 0.2 behavior.
+
+Automated results: **78 EditMode** and **35 PlayMode** tests passed (62 and 27 before; 24 new). New characterization tests load the shipped `UtilityHelicopter` asset.
+
+| Metric (shipped tuning) | 0.2.0 | Phase 1 | Evidence |
+| --- | --- | --- | --- |
+| Steady climb after +1% collective over hover | +2.33 m/s | +0.48 m/s | `HandlingEnvelopeTests`, `HandlingRuntimeTests` (band 0.40–0.58) |
+| 90% vertical settling after a collective step | 19.7 s | ≈5.4 s empty, 6.7 s with 300 kg | same (≤6.5 s empty; loaded slower) |
+| One 60 fps keyboard frame of collective | 0.40% | ≈0.10% | `InputProcessingTests`, `InputDeviceRuntimeTests` |
+| Sideslip after 4 s in a 20° bank at 30 m/s, Standard | ≈22° (no turn) | < 5° while turning | `HandlingRuntimeTests` |
+| Unassisted 0.25 s roll tap, 1.5 s later | still rolling ≈37°/s | < 5°/s, bank stops in 8–35° | `HandlingRuntimeTests` |
+| Standard maximum pitch rate | 34°/s | 34°/s ± 1.7 (feed-forward) | `HandlingRuntimeTests` |
+
+Windows smoke flights (same scripted 0.49 then 0.47 collective inputs, 1600×900 windowed, `Tools/Smoke.ps1`), all passing with zero errors:
+
+| Frame cap | Average FPS | Peak skid AGL | Peak ground speed | 0.2.0 peak AGL |
+| --- | --- | --- | --- | --- |
+| 30 | 29.6 | 19.92 m | 3.55 m/s | 54.86 m |
+| 60 | 58.8 | 19.94 m | 3.55 m/s | 54.42 m |
+| 144 | 139.0 | 19.94 m | 3.55 m/s | 54.41 m |
+
+The smoke pass rule now requires a peak AGL of 8–32 m and ground speed of 1.5–10 m/s, so a return to the old runaway climb fails. The 60 fps run also repeated the effects diagnostics (graded impact, explosion, reset restore, water suppression: all passed). The screenshots show the one-decimal collective readout with the hover tick at 44.8%.
+
+A prototype of the same equations predicted these results before implementation (it reproduced the 0.2.0 run's 18 m at +4.6 m/s after 8 s). Tuning values remain provisional: **no human has flown this build yet.** Use the flight recorder (F3) during playtests so feel reports come with data.
 
 ## Graphics and effects release (0.2.0)
 

@@ -54,8 +54,10 @@ namespace HoverForHire
             hud.SelectMenuPage(1);yield return null;yield return Capture("06-controls.png");
             hud.SelectMenuPage(2);yield return null;yield return Capture("07-bindings.png");
             hud.SelectMenuPage(3);yield return null;yield return Capture("08-assists-camera.png");
-            File.WriteAllText(Path.Combine(output,"runtime-smoke.json"),JsonUtility.ToJson(new Report {Errors=errors,FrameLimit=frameLimit,AverageFps=measuredFrames/Mathf.Max(.1f,Time.unscaledTime-measurementStart),PeakAltitude=peakAltitude,PeakSpeed=peakSpeed,StartedGrounded=startedGrounded,ResetGrounded=game.Aircraft.Grounded,EverCrashed=everCrashed,Engine=Application.unityVersion,PostProcessing=game.CameraRig.GetComponent<Camera>().GetUniversalAdditionalCameraData().renderPostProcessing,Tonemapping=VolumeManager.instance.stack.GetComponent<Tonemapping>().mode.value.ToString(),AmbientProbeL0=RenderSettings.ambientProbe[0,0]},true));
-            bool passed=errors==0&&peakAltitude>4&&peakSpeed>1&&!everCrashed&&startedGrounded&&game.Aircraft.Grounded;
+            // Scripted 0.49 then 0.47 collective: heave damping should settle near 2 m/s and peak around 18 m.
+            // Both bounds matter: a regression toward the old runaway climb (54 m) fails as surely as a weak one.
+            bool passed=errors==0&&peakAltitude>=8&&peakAltitude<=32&&peakSpeed>=1.5f&&peakSpeed<=10&&!everCrashed&&startedGrounded&&game.Aircraft.Grounded;
+            File.WriteAllText(Path.Combine(output,"runtime-smoke.json"),JsonUtility.ToJson(new Report {Errors=errors,Passed=passed,FrameLimit=frameLimit,AverageFps=measuredFrames/Mathf.Max(.1f,Time.unscaledTime-measurementStart),PeakAltitude=peakAltitude,PeakSpeed=peakSpeed,StartedGrounded=startedGrounded,ResetGrounded=game.Aircraft.Grounded,EverCrashed=everCrashed,Engine=Application.unityVersion,PostProcessing=game.CameraRig.GetComponent<Camera>().GetUniversalAdditionalCameraData().renderPostProcessing,Tonemapping=VolumeManager.instance.stack.GetComponent<Tonemapping>().mode.value.ToString(),AmbientProbeL0=RenderSettings.ambientProbe[0,0]},true));
             if(artTour)yield return Tour();
             Application.Quit(passed&&errors==0?0:1);
         }
@@ -109,7 +111,7 @@ namespace HoverForHire
         void Update(){if(game==null)return;measuredFrames++;peakAltitude=Mathf.Max(peakAltitude,game.Aircraft.AltitudeAGL);peakSpeed=Mathf.Max(peakSpeed,game.Aircraft.GroundSpeed);everCrashed|=game.Aircraft.Crashed;}
         void OnLog(string text,string stack,LogType type){if(type==LogType.Error||type==LogType.Exception||type==LogType.Assert)errors++;}
         void OnDestroy()=>Application.logMessageReceived-=OnLog;
-        [Serializable] class Report { public int Errors,FrameLimit;public float AverageFps,PeakAltitude,PeakSpeed,AmbientProbeL0;public bool StartedGrounded,ResetGrounded,EverCrashed,PostProcessing;public string Engine,Tonemapping; }
+        [Serializable] class Report { public int Errors,FrameLimit;public float AverageFps,PeakAltitude,PeakSpeed,AmbientProbeL0;public bool Passed,StartedGrounded,ResetGrounded,EverCrashed,PostProcessing;public string Engine,Tonemapping; }
         [Serializable] class EffectsReport { public bool HardImpactNoExplosion,CatastrophicExplosion,ResetRestored,WaterNoExplosion;public int Errors; }
     }
 }

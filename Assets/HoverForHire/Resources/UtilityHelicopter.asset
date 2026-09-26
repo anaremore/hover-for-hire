@@ -15,6 +15,7 @@ MonoBehaviour:
   EmptyMassKg: 1050
   MaximumPayloadKg: 450
   CenterOfMass: {x: 0, y: -0.3, z: 0}
+  InertiaKgM2: {x: 1174, y: 1233, z: 690}
   MaximumLiftNewtons: 23000
   CollectiveResponseSeconds: 0.35
   RotorDiskTiltDegrees: 3
@@ -32,9 +33,14 @@ MonoBehaviour:
   LevelAngleForFullCommand: 24
   LevelCyclicThreshold: 0.22
   LevelAuthority: 0.6
+  CoordinationStartSpeed: 8
+  CoordinationFullSpeed: 18
   LinearDrag: {x: 34, y: 72, z: 12}
   QuadraticDrag: {x: 5.5, y: 9, z: 1.7}
   AngularDrag: {x: 180, y: 230, z: 190}
+  HeaveDampingNsPerM: 400
+  RotorRateDampingPerSecond: {x: 2.5, y: 1, z: 2.5}
+  WeathervaneCoefficient: 3
   SkidClearanceMeters: 1.5
   AltitudeRayLengthMeters: 3000
   GroundNormalThreshold: 0.65

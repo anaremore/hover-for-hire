@@ -29,7 +29,7 @@ namespace HoverForHire
         MissionDirector Missions=>Game.Missions;
         void Start()
         {
-            Input.PauseRequested+=TogglePause;Input.ResetRequested+=Retry;Input.InteractRequested+=Interact;Input.DebugRequested+=ToggleDebug;Input.AssistRequested+=CycleAssists;Input.HoverRequested+=HoverNotice;
+            Input.PauseRequested+=TogglePause;Input.ResetRequested+=Retry;Input.InteractRequested+=Interact;Input.DebugRequested+=ToggleDebug;Input.AssistRequested+=CycleAssists;Input.HoverRequested+=HoverNotice;Input.RecordRequested+=ToggleRecording;
             Aircraft.ResetPerformed+=ResetInput;
             Missions.FeedbackEvent+=MissionFeedback;
             try { if(PlayerPrefs.HasKey("hfh.assists"))JsonUtility.FromJsonOverwrite(PlayerPrefs.GetString("hfh.assists"),Aircraft.Assists); }catch(Exception){ }
@@ -47,6 +47,12 @@ namespace HoverForHire
             if(message.StartsWith("Loaded",StringComparison.Ordinal)||message.StartsWith("Delivered",StringComparison.Ordinal)||message.StartsWith("Drill complete",StringComparison.Ordinal))Audio.ServiceChime();
         }
         void ToggleDebug()=>debug=!debug;
+        void ToggleRecording()
+        {
+            var recorder=Game.Recorder;if(recorder==null)return;recorder.Toggle();
+            notice=recorder.IsRecording?"Flight recording started. Press F3 again to save.":"Flight recording saved: "+System.IO.Path.GetFileName(recorder.CurrentPath);
+            noticeUntil=Time.unscaledTime+6;
+        }
         void HoverNotice(){notice="Hover hold is deferred. Use rate / level assist and practice a steady collective.";noticeUntil=Time.unscaledTime+6;}
         void CycleAssists(){preset=(preset+1)%3;Aircraft.SetPreset((AssistPreset)preset);Save();}
         void TogglePause()=>SetPause(!paused);
@@ -163,6 +169,9 @@ namespace HoverForHire
             FlightHudGraphics.Line(new Vector2(cx,77),new Vector2(cx+5,82),FlightHudGraphics.Paper,1.6f);
             Box(new Rect(cx-35,88,70,27),.48f);
             Text(new Rect(cx-35,87,70,27),$"{heading:000}°",hudCenter,FlightHudGraphics.Paper);
+            var recorder=Game.Recorder;
+            if(recorder!=null&&recorder.IsRecording)
+                Text(new Rect(cx-70,118,140,22),$"● REC  {TimeText(Time.time-recorder.RecordingStartTime)}",hudCenter,new Color(1f,.32f,.25f));
         }
         void DrawInstruments()
         {
@@ -188,14 +197,19 @@ namespace HoverForHire
             float collective=Input.Command.Collective;
             if(cockpit)
             {
-                Text(new Rect(30,376,272,22),$"COLLECTIVE  {collective*100:0}%   /   {Aircraft.PayloadKg:0} kg",hudSmall);
+                Text(new Rect(30,351,272,22),$"PAYLOAD  {Aircraft.PayloadKg:0} kg",hudSmall,FlightHudGraphics.Muted);
+                Text(new Rect(30,376,320,22),$"COLLECTIVE  {collective*100:0.0}%   HOVER  {Aircraft.HoverCollective*100:0.0}%",hudSmall);
                 Text(new Rect(30,401,290,38),"ASSIST  /  "+Aircraft.Assists.Summary,hudSmall,FlightHudGraphics.Muted);
             }
             else
             {
-                Text(new Rect(cx-99,624,198,22),$"COLLECTIVE  {collective*100:0}%",hudCenter);
+                Text(new Rect(cx-99,624,198,22),$"COLLECTIVE  {collective*100:0.0}%",hudCenter);
                 Bar(new Rect(cx-91,654,182,5),collective,FlightHudGraphics.Phosphor);
                 for(int i=0;i<=4;i++)FlightHudGraphics.Fill(new Rect(cx-91+i*45.5f,650,1,13),FlightHudGraphics.Muted);
+                // Hover reference for the current weight: level, still air, out of ground effect.
+                float hoverX=cx-91+182*Mathf.Clamp01(Aircraft.HoverCollective);
+                FlightHudGraphics.Fill(new Rect(hoverX-1,645,2,19),FlightHudGraphics.Amber);
+                Text(new Rect(hoverX-30,664,60,16),"HOVER",hudCenter,FlightHudGraphics.Amber);
                 DrawAircraftStatus();
             }
             if(Input.Settings.ShowCyclicIndicator || Input.Settings.MouseMode==MouseCyclicMode.VirtualJoystick)
@@ -376,8 +390,8 @@ namespace HoverForHire
         }
         void DrawDebug()
         {
-            Box(new Rect(25,231,440,240),.95f);var b=Aircraft.Body;
-            GUI.Label(new Rect(40,240,410,225),$"DEVELOPMENT / fixed {Time.fixedDeltaTime:0.000}s\nVelocity  {b.linearVelocity.ToString("F2")} m/s\nAngular  {Aircraft.LocalAngularRatesDegrees.ToString("F1")} deg/s\nRaw  {Aircraft.RawCommand.Cyclic} yaw {Aircraft.RawCommand.Yaw:0.00}\nAssisted  {Aircraft.AssistedCommand.Cyclic} yaw {Aircraft.AssistedCommand.Yaw:0.00}\nLift  {Aircraft.LiftNewtons:0} N   Mass  {b.mass:0} kg\nRotor  {Aircraft.RotorRpm:0} rpm   Grounded  {Aircraft.Grounded}\nTouchdown  {Aircraft.LastTouchdownSpeed:0.00} m/s\nGround speed {Aircraft.GroundSpeed:0.0} m/s",small);
+            Box(new Rect(25,231,440,280),.95f);var b=Aircraft.Body;
+            GUI.Label(new Rect(40,240,410,265),$"DEVELOPMENT / fixed {Time.fixedDeltaTime:0.000}s\nVelocity  {b.linearVelocity.ToString("F2")} m/s\nAngular  {Aircraft.LocalAngularRatesDegrees.ToString("F1")} deg/s\nRaw  {Aircraft.RawCommand.Cyclic} yaw {Aircraft.RawCommand.Yaw:0.00}\nAssisted  {Aircraft.AssistedCommand.Cyclic} yaw {Aircraft.AssistedCommand.Yaw:0.00}\nLift  {Aircraft.LiftNewtons:0} N   Mass  {b.mass:0} kg\nRotor  {Aircraft.RotorRpm:0} rpm   Grounded  {Aircraft.Grounded}\nTouchdown  {Aircraft.LastTouchdownSpeed:0.00} m/s\nGround speed {Aircraft.GroundSpeed:0.0} m/s   Sideslip {Aircraft.SideslipDegrees:0.0}°\nHover collective {Aircraft.HoverCollective*100:0.0}%   Recording {(Game.Recorder!=null&&Game.Recorder.IsRecording?"on":"off")} (F3)",small);
         }
         void DrawMenu()
         {
@@ -421,6 +435,10 @@ namespace HoverForHire
             s.MouseMode=(MouseCyclicMode)MenuToolbar((int)s.MouseMode,new[]{"Relative + return","Virtual joystick"});
             Slider("Mouse sensitivity",ref s.MouseSensitivity,.0005f,.02f,"F4");Slider("Return toward center / s",ref s.MouseReturnRate,0,8);Slider("Deadzone",ref s.Deadzone,0,.4f);Slider("Response curve",ref s.ResponseCurve,.5f,3);
             s.InvertPitch=MenuToggle(s.InvertPitch,"Invert cyclic pitch");s.InvertRoll=MenuToggle(s.InvertRoll,"Invert cyclic roll");Slider("Keyboard response",ref s.KeyboardResponse,2,30);Slider("Collective change / s",ref s.CollectiveRate,.05f,1);
+            Slider("Collective fine trim / s (key tap)",ref s.CollectiveFineRate,.01f,.5f,"F3");Slider("Collective ramp to full rate / s",ref s.CollectiveRampSeconds,0,1.5f);
+            Slider("Pedal tap strength",ref s.YawFineFraction,.05f,1);Slider("Pedal ramp to full / s",ref s.YawRampSeconds,0,1.5f);
+            GUILayout.Label("Gamepad layout · Sim pedals puts analog pedals on the triggers and collective on the shoulders",label);
+            int layout=MenuToolbar((int)s.GamepadLayout,new[]{"Classic","Sim pedals"});if(layout!=(int)s.GamepadLayout)Input.ApplyGamepadLayout((GamepadLayout)layout);
             GUILayout.Label("Cyclic while holding free look",label);s.FreeLookBehavior=(FreeLookCyclicMode)MenuToolbar((int)s.FreeLookBehavior,new[]{"Hold command","Return to neutral"});
             s.ShowCyclicIndicator=MenuToggle(s.ShowCyclicIndicator,"Show cyclic indicator");s.UseAbsoluteCollective=MenuToggle(s.UseAbsoluteCollective,"Use absolute collective axis (bind below first)");s.AbsoluteAxisSigned=MenuToggle(s.AbsoluteAxisSigned,"Absolute axis range is -1 to +1");s.InvertAbsoluteCollective=MenuToggle(s.InvertAbsoluteCollective,"Invert absolute collective");
             GUILayout.Label("MMB duplicates Alt free look on systems that intercept Alt. C recenters cyclic; R recenters only the view. Bindings can be changed on the next tab.",small);
@@ -523,7 +541,7 @@ namespace HoverForHire
         {
             if(Game!=null&&Game.Input!=null)
             {
-                Input.PauseRequested-=TogglePause;Input.ResetRequested-=Retry;Input.InteractRequested-=Interact;Input.DebugRequested-=ToggleDebug;Input.AssistRequested-=CycleAssists;Input.HoverRequested-=HoverNotice;
+                Input.PauseRequested-=TogglePause;Input.ResetRequested-=Retry;Input.InteractRequested-=Interact;Input.DebugRequested-=ToggleDebug;Input.AssistRequested-=CycleAssists;Input.HoverRequested-=HoverNotice;Input.RecordRequested-=ToggleRecording;
                 if(Aircraft!=null)Aircraft.ResetPerformed-=ResetInput;if(Game.Missions!=null)Missions.FeedbackEvent-=MissionFeedback;
             }
             foreach(var texture in new[]{mapTexture,buttonIdle,buttonHover,buttonActive,toggleOff,toggleOn})if(texture!=null)Destroy(texture);
