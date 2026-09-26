@@ -1,6 +1,61 @@
 # Validation and playtest checklist
 
-Status snapshot: **26 September 2026, Unity 6000.3.22f1** (phase 4 of the 0.3 overhaul; the 0.2.0 and 0.1.0 sections below are kept as the baseline). The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
+Status snapshot: **26 September 2026, Unity 6000.3.22f1** (phase 5 of the 0.3 overhaul; the 0.2.0 and 0.1.0 sections below are kept as the baseline). The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
+
+## Loop, progression, cockpit and beginner aids (0.3 development, phase 5)
+
+**26 September 2026.**
+
+**Jobs.**
+- **Offer board:** between jobs the director deals up to three available contracts. The first starts at the pad the aircraft is on whenever one does. The deal is seeded by progress, so the same record sees the same offers.
+- **Par:** a minute for the terminals plus cruise at 25 m/s. The autopilot's flown Home → Town Green took 71 s against a par of 1:15.
+- **Time limits:** 3× par for starter jobs, 2× for later ones. The HUD job clock shows elapsed time against par.
+
+**Progression.**
+- **Certifications:** earned in drills. Rooftop, Mountain, Coastal and Emergency open demanding pads, never a better aircraft. The first two jobs stay open, and delivery-count gating remains.
+- **Logbook:** progression version 2 records flight time, landings, route bests and drill bests. Version 1 saves migrate once on load, rebuilding bests from the results they already hold.
+- **Liveries:** four paint-only schemes, bought with earnings.
+
+**Pad cues.**
+- Passengers or crates wait at the pickup and board when loading completes.
+- The target pad shows a strobe beacon, orange smoke that drifts with the wind, and edge lights.
+- The cues are cosmetic and own no colliders.
+
+**Beginner aids.**
+- **Hover hold (H):** adds bounded cyclic, collective and pedal inputs to the pilot's own. It hands back on any deliberate input.
+- **Attitude command** (off by default): the stick sets bank and pitch.
+
+**Cockpit.** The cockpit was rebuilt with Blender 5.1:
+- a lower, narrower instrument panel, with the side displays removed;
+- chin windows;
+- thinner pillars and frames;
+- five large dials: airspeed (kt), radar altitude, vertical speed, torque and rotor speed.
+
+**Mirrored model found and fixed.** The build script had mapped Unity coordinates into Blender without a handedness flip. Every export since 0.2 came out mirrored in Unity:
+- the dials read right to left;
+- the visual tail rotor sat on the opposite side of the fin from the flight model's tail-strike sensor;
+- the main rotor's blades were shaped for the opposite rotation to the one shown.
+
+The fixes:
+- The script now flips X.
+- The main rotor turns counter-clockwise seen from above, matching the flight model's torque reaction.
+- A PlayMode test (`AircraftArtIsTheRightWayRound`) checks the tail rotor position, the doors and the dial order.
+- The dial legends had never rendered in Unity: normal recalculation turned the flat lettering away from the pilot. They are now oriented explicitly towards the reader.
+- The tail registration moved ahead of the horizontal stabilizer, which had hidden most of it.
+
+**Tests.** **115 EditMode** and **62 PlayMode** tests passed. New tests cover:
+- the offer board, par and certifications (`ProgressionLoopTests`);
+- the logbook and migration (`LogbookTests`);
+- pad cues;
+- the beginner aids (`BeginnerAidsRuntimeTests`);
+- the aircraft art's handedness.
+
+**Smoke and screenshots** (60 fps, 1600×900).
+- **Earlier phase 5 runs** captured the shift and offer board, the Logbook tab, the Coastguard livery and the pad cues at home base.
+- **Final run:** passed with no errors at 59.3 fps on average.
+- **In-game cockpit:** the dials read KT, RAD ALT, V/S, TQ and NR from left to right, with legible legends. Each needle agreed with the HUD: 7 kt, 25 m, +1.1 m/s and rotor speed 100%.
+- **Exterior:** the tail rotor sits on the right of the fin.
+- **Close Blender renders:** the lettering reads correctly on both sides, the red light is on the left, and the blades advance counter-clockwise.
 
 ## HUD, units and presentation refactor (0.3 development, phase 4)
 
@@ -235,6 +290,8 @@ The baseline views were inspected at 1280×720. That pass corrected pad surface 
 | Change controls, restart and retain settings | Local preferences, semantic binding overrides and separate progression with recoverable JSON backup. | Input/settings round trips and regenerated-action binding restoration pass; mission save/reload, backup recovery and persistent duplicate IDs pass. | Rebind a useful action, change sensitivity/assists, restart the standalone player, confirm restoration, then restore desired settings. |
 | Practice twelve short drills | Takeoff, hover, yaw, forward flight, braking, approach and precision landing, plus crosswind, heavy lift, settling with power, autorotation and confined area, with measurable completion conditions and retries. | All twelve completion paths pass; unstable hover, hard precision landing and remaining on the starting pad cannot falsely complete. The realism techniques are flown by physics (autorotation touchdown 0.93 m/s, vortex-ring recovery, crosswind landing). | Instructions and feedback should lead to useful corrections; complete at least hover, precision landing and the autorotation drill using real controls. |
 | Choose how hard the aircraft and weather push back | Relaxed / Realistic / Expert realism or individual toggles, recorded with every result; each realism drill switches on only the effect it teaches. | Each effect is flown with only it enabled; Relaxed matches the base model to 0.001 m/s away from the ground; presets and custom summaries round-trip. | Fly the settling-with-power and autorotation drills in Realistic; judge whether the warnings, shudder and feedback teach the technique, and whether Expert wind is fun rather than tiring. |
+| Choose jobs and build a record | An offer board of up to three jobs with par and time limits; certifications earned in drills open demanding pads; a logbook of time, landings and bests; paint-only liveries bought with earnings. | Offers are seeded and start at the current pad; every contract has par, limits and its certification; version 1 records migrate and reload; livery purchases cannot overspend; pad cues follow the job and own no colliders. | Judge whether offers, par and certifications give a reason to fly the next job and to practice the drills, and whether the logbook is worth opening. |
+| Get help in the hover without losing control | Hover hold (H) and an optional attitude-command mode, both with bounded authority; hover hold hands back on any deliberate input. | The hold arrests a 3.2 m/s drift and a sink within 12 s, keeps the heading and hands back on stick input; full stick holds 25° of bank and a centered stick flies level. | Use the hold on a first landing: does it help without surprising you when it hands back? Try attitude command against rate command. |
 | Maintain consistent handling across rendering rates | Fixed 50 Hz physics; elapsed-time actuator response; frame-aware mouse processing. | Pure mouse/return tests and rendered player sequences at 30/60/144 FPS pass; flight metrics vary by less than 1%. | Repeat a complete route at these frame rates with actual controls. Judge frame pacing, camera response and landing consistency. |
 | Play on Windows, macOS and Linux | Standalone build entry points and cross-platform Unity/Input System code. | All three builds succeeded; Windows player launched and completed scripted flights. | Native macOS/Linux launch, display, controller mapping, focus/OS shortcuts, audio, local saves and practical performance. |
 

@@ -38,7 +38,7 @@ If setup assets ever need regeneration, use **Hover for Hire → Prepare project
 - Chase and cockpit cameras with free look, smoothing, collision handling, and recentering.
 - Free Flight, twelve training drills (the basics, then crosswind, heavy lift, settling with power, autorotation and confined-area landings), passenger and internal cargo deliveries, stable loading/unloading, comfort/condition/landing/time scores against par, an offer board of up to three jobs, skill certifications earned in training that open rooftop, mountain, coastal and emergency work, a logbook of flight time, landings, personal bests and certifications, liveries bought with earnings (paint only), and duplicate payout prevention.
 - Ten pads across a detailed coastal town, airport, ferry harbor, industrial yard, rooftop clinic, orchard, hills and remote sites; mixed forests, marked roads, boats and shoreline scenery.
-- Original modeled utility helicopter, live cockpit gauges, smooth painted/alloy/glass materials, textured terrain, animated water, cloud sky, soft shadows and film grading.
+- Original modeled utility helicopter with a low, narrow instrument panel and chin windows. Five live dials: airspeed, radar altitude, vertical speed, torque and rotor speed. Smooth painted/alloy/glass materials, textured terrain, animated water, cloud sky, soft shadows and film grading.
 - A decluttered flight HUD that keeps the aircraft clear:
   - airspeed (through the air) and altitude tapes, with ground speed and vertical speed beside them;
   - a compact attitude indicator;

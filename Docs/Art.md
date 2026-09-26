@@ -2,7 +2,27 @@
 
 Version 0.2 adds a more grounded coastal aviation look: an original utility helicopter with a modeled cockpit, warm orange commercial livery, detailed island settlements, layered terrain, moving coastal water, and late-afternoon lighting. Flight instruments draw on the restrained compass and physical cockpit presentation in [WARDOGS' official helicopter screenshot](https://www.team17.com/hs-fs/hubfs/WD_Screenshot_Helicopter_1_WD1.jpg?length=2000&name=WD_Screenshot_Helicopter_1_WD1.jpg). No WARDOGS assets are included.
 
-The helicopter mesh is authored with the reproducible Blender script in `Tools/Art/build_helicopter.py`; the FBX is included, so Blender is not needed to open or build the Unity project. Island architecture, roads, trees, rocks, landmark details, sky, water, HUD and effects are original procedural assets/code.
+The helicopter mesh is authored with the reproducible Blender script in `Tools/Art/build_helicopter.py`; the FBX is included, so Blender is not needed to open or build the Unity project. Island architecture, roads, trees, rocks, landmark details, sky, water, HUD and effects are original procedural assets/code. Regenerate the helicopter with:
+
+```
+blender --background --factory-startup --python Tools/Art/build_helicopter.py
+```
+
+**Cockpit.** The 0.3 cockpit is built for looking out:
+* **Panel:** a low, narrow instrument panel, with no side displays.
+* **Glazing:** chin windows in the lower nose, and thinner pillars and frames.
+* **Dials:** five large ones, left to right: airspeed (0–140 kt), radar altitude (0–300 m), vertical speed (±10 m/s), torque (0–120%) and rotor speed (60–120%). Their needles are live.
+* **Lettering:** the dial legends and airframe lettering are flat geometry, oriented to face whoever reads them. The HFH-06 registration wraps onto the tail boom ahead of the horizontal stabilizer, which used to hide most of it.
+
+**Handedness.** The script writes Unity coordinates (X right) into Blender's right-handed space with X flipped, because Unity's FBX importer flips it back. Until 0.3 the flip was missing, so the aircraft came out mirrored:
+* the dials read right to left;
+* the visual tail rotor sat on the opposite side of the fin from the flight model's tail-strike sensor;
+* the main rotor's blades were shaped for the opposite rotation to the one shown.
+
+Now:
+* the tail rotor is on the right of the fin;
+* the main rotor turns counter-clockwise seen from above, as the flight model's torque reaction implies (more power yaws the nose right);
+* a PlayMode test checks the tail rotor, doors and dial order.
 
 The following 1K albedo and OpenGL normal maps are from Poly Haven. They are distributed under [CC0](https://polyhaven.com/license), which permits redistribution and commercial use. Downloaded files were checked against the MD5 values returned by the official public API.
 

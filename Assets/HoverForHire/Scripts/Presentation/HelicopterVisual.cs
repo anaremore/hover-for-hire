@@ -13,7 +13,7 @@ namespace HoverForHire
         public Transform CockpitMount { get; private set; }
         public const string AircraftResource = "Art/Helicopter/HFH_Utility_Helicopter";
         Transform rotor, tailRotor;
-        static readonly string[] GaugeNames = { "airspeed", "altitude", "vertical speed", "rotor rpm", "heading" };
+        static readonly string[] GaugeNames = { "airspeed", "radar altitude", "vertical speed", "torque", "rotor rpm" };
         readonly Transform[] gauges = new Transform[5];
         readonly Quaternion[] gaugeRest = new Quaternion[5];
         Renderer rotorBlur, tailBlur;
@@ -274,13 +274,16 @@ namespace HoverForHire
             if (aircraft == null)
                 return;
             float rpm = aircraft.RotorRpm, speed01 = aircraft.RotorSpeed01;
-            SetGauge(0, Mathf.Lerp(-130, 130, Mathf.Clamp01(aircraft.Airspeed * 1.9438445f / 140)));
-            SetGauge(1, Mathf.Lerp(-130, 130, Mathf.Clamp01(aircraft.AltitudeAGL / 1000)));
+            // Dials: airspeed 0-140 kt, radar altitude 0-300 m, vertical speed +/-10 m/s, torque 0-120%, rotor speed 60-120%.
+            SetGauge(0, Mathf.Lerp(-130, 130, Mathf.Clamp01(aircraft.HorizontalAirspeed * UnitFormat.KnotsPerMetrePerSecond / 140)));
+            SetGauge(1, Mathf.Lerp(-130, 130, Mathf.Clamp01(aircraft.AltitudeAGL / 300)));
             SetGauge(2, Mathf.Lerp(-130, 130, Mathf.InverseLerp(-10, 10, aircraft.VerticalSpeed)));
-            SetGauge(3, Mathf.Lerp(-130, 130, aircraft.RotorSpeed01));
-            SetGauge(4, aircraft.Heading);
+            SetGauge(3, Mathf.Lerp(-130, 130, Mathf.Clamp01(aircraft.TorqueFraction / 1.2f)));
+            SetGauge(4, Mathf.Lerp(-130, 130, Mathf.InverseLerp(0.6f, 1.2f, aircraft.RotorSpeed01)));
+            // The main rotor turns counter-clockwise seen from above: the fuselage's torque reaction in the flight
+            // model yaws the nose right under power.
             if (rotor != null)
-                rotor.Rotate(Vector3.up, ApparentStep(rpm * 6 * Time.deltaTime, MainBlades, speed01), Space.Self);
+                rotor.Rotate(Vector3.up, -ApparentStep(rpm * 6 * Time.deltaTime, MainBlades, speed01), Space.Self);
             if (tailRotor != null)
                 tailRotor.Rotate(Vector3.right, ApparentStep(rpm * 18 * Time.deltaTime, TailBlades, speed01), Space.Self);
             float blur = aircraft.Crashed ? 0 : Mathf.SmoothStep(0, 1, Mathf.InverseLerp(BlurStartSpeed01, 1, speed01));

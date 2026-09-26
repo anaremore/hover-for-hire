@@ -188,5 +188,29 @@ namespace HoverForHire.Tests
                 Assert.That(Vector3.Angle(controller.Body.rotation * Vector3.up, Vector3.up), Is.LessThan(2f), zone.DisplayName);
             }
         }
+
+        [Test]
+        public void AircraftArtIsTheRightWayRound()
+        {
+            HelicopterController controller = ProductionAircraft();
+            Renderer[] parts = controller.GetComponentsInChildren<Renderer>();
+            Vector3 Local(string part)
+            {
+                foreach (Renderer renderer in parts)
+                    if (renderer.name == part) return controller.transform.InverseTransformPoint(renderer.bounds.center);
+                Assert.Fail(part + " is missing from the aircraft art.");
+                return Vector3.zero;
+            }
+
+            // A mirrored export puts the visual tail rotor on the far side of the fin from the tail-strike sensor.
+            Vector3 tailRotor = Local("Tail rotor (visual only)");
+            Assert.That(tailRotor.x, Is.EqualTo(tuning.TailRotorHub.x).Within(0.15f), "The tail rotor is drawn where strikes are sensed.");
+            Assert.That(tailRotor.z, Is.EqualTo(tuning.TailRotorHub.z).Within(0.3f));
+            Assert.That(Local("Cabin door left").x, Is.LessThan(-0.5f));
+            Assert.That(Local("Cabin door right").x, Is.GreaterThan(0.5f));
+            // The pilot, in the right seat, reads the dials left to right: airspeed first, rotor speed last.
+            Assert.That(Local("Gauge needle airspeed").x, Is.LessThan(Local("Gauge needle vertical speed").x));
+            Assert.That(Local("Gauge needle vertical speed").x, Is.LessThan(Local("Gauge needle rotor rpm").x));
+        }
     }
 }

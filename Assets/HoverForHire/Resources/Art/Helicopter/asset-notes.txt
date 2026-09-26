@@ -1,4 +1,5 @@
 Original HFH-6 utility helicopter. Generated with Tools/Art/build_helicopter.py.
-29,818 triangles; fourteen mesh renderers including five live instrument needles; no colliders, external images or fonts.
+28,407 triangles; fourteen mesh renderers including five live instrument needles; no colliders, external images or fonts.
 Metres; Unity +Z forward / +Y up. Pilot eye (0.43, 0.63, 0.10), 5 degrees down.
+Cockpit: low narrow panel with airspeed, radar altitude, vertical speed, torque and rotor-speed dials; chin windows.
 URP materials configured by HelicopterVisual.cs. Source models are generated offline.

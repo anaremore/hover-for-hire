@@ -2,8 +2,9 @@
 
 All flight controls use Unity's Input System. Open the pause settings to change bindings and preferences. On-screen key hints (including collective) are built from the current bindings and switch between keyboard and gamepad names according to the device used last. On first launch a welcome panel explains collective and lets you choose a realism preset (Relaxed, Realistic or Expert; changeable later under Flight Desk → Assists / realism, where each effect can also be toggled). It then offers the Takeoff drill or free flight, and appears once. Keyboard composite directions, gamepad axes, individual buttons, mouse delta, and the initially unbound absolute collective are exposed separately. Press Escape or the gamepad menu Back binding to cancel an interactive rebind (Escape alone while changing MenuBack itself). Changes to a completed binding save immediately; save preferences after editing settings. Restoring defaults affects controls and camera preferences only, leaving progression intact.
 
-The Flight Desk has five tabs:
-* **Fly:** modes and drills.
+The Flight Desk has six tabs:
+* **Fly:** the offer board, modes and drills.
+* **Logbook:** flight time, landings, certifications, personal bests, recent results and the livery shop.
 * **Controls.**
 * **Bindings.**
 * **Assists / realism.**
