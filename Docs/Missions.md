@@ -83,7 +83,14 @@ Training height bands measure upright skid clearance above the home pad, account
 
 ## Persistence and result integrity
 
-`progression.json` is stored in Unity's per-user `Application.persistentDataPath`, independently from input/settings persistence. Results record all distinct assist configurations used during a challenge, the realism in force (for example `REALISTIC` or `CUSTOM: GE ETL POWER`), grade, score, time, condition and landing metrics. Older saves without a realism field load unchanged. Training records are separate from paid deliveries and do not unlock contracts.
+`progression.json` is stored in Unity's per-user `Application.persistentDataPath`, independently from input/settings persistence. Version 2 of the record adds the **logbook**:
+* airborne flight time;
+* landings (touchdowns below the hard-landing limit);
+* each route's fastest time and best score;
+* each drill's best score, with the assists and realism it was flown with;
+* recent results.
+
+It also adds **liveries**: four paint schemes bought with earnings. They are paint only and never change the aircraft. Version 1 saves migrate on load; their personal bests are rebuilt from the results they already keep. The Flight Desk's Logbook tab shows the record, the certifications earned and still to earn, and the liveries. Results record all distinct assist configurations used during a challenge, the realism in force (for example `REALISTIC` or `CUSTOM: GE ETL POWER`), grade, score, time, condition and landing metrics. Older saves without a realism field load unchanged. Training records are separate from paid deliveries and do not unlock contracts.
 
 The save writes a fully flushed temporary file, replaces the primary file and retains a backup. Loading rejects missing/unsupported schema and invalid data, then tries the backup. A partial temporary write is never treated as completed progression. Platforms without `File.Replace` use a recoverable backup/move sequence. A corrupt primary does not overwrite the valid backup during recovery. Save failures keep progress in memory, expose `SaveWarning`, and retry on the next result, application pause or quit. The most recent 100 challenge details are retained; attempt IDs are retained for duplicate-payment protection.
 

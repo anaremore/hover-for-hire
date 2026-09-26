@@ -11,8 +11,8 @@ namespace HoverForHire
     /// </summary>
     public sealed class FlightDeskMenu
     {
-        public const int PageFly = 0, PageControls = 1, PageBindings = 2, PageAssists = 3, PageView = 4;
-        private static readonly string[] Tabs = { "Fly", "Controls", "Bindings", "Assists / realism", "View / sound" };
+        public const int PageFly = 0, PageLogbook = 1, PageControls = 2, PageBindings = 3, PageAssists = 4, PageView = 5;
+        private static readonly string[] Tabs = { "Fly", "Logbook", "Controls", "Bindings", "Assists / realism", "View / sound" };
         private static readonly string[] DrillLabels = BuildDrillLabels();
 
         private readonly FlightHUD hud;
@@ -87,6 +87,7 @@ namespace HoverForHire
                 switch (page)
                 {
                     case PageFly: FlyPage(); break;
+                    case PageLogbook: LogbookPage(); break;
                     case PageControls: ControlsPage(); break;
                     case PageBindings: BindingsPage(); break;
                     case PageAssists: AssistsPage(); break;
@@ -136,6 +137,69 @@ namespace HoverForHire
             GUILayout.Label("Raise collective gradually. Around 45% is empty hover power. Tilt forward to accelerate; tilt back early to brake. Lower collective after touchdown.", S.Small);
             if (Button("Quit game")) { hud.Save(); Application.Quit(); }
         }
+
+        /// <summary>The pilot's record: totals, certifications, personal bests, recent results and liveries.</summary>
+        private void LogbookPage()
+        {
+            ProgressionData record = Missions.Progression;
+            if (record == null) { GUILayout.Label("No pilot record is available.", S.Label); return; }
+            GUILayout.Label("PILOT RECORD", S.Label);
+            GUILayout.Label($"Flight time {FlightTime(record.FlightSeconds)}  ·  {Count(record.Landings, "landing", "landings")}  ·  " +
+                $"{Count(record.CompletedDeliveries, "delivery", "deliveries")}  ·  " +
+                $"${record.TotalEarnings} earned  ·  ${record.Balance} to spend", S.Small);
+            GUILayout.Space(6);
+            GUILayout.Label("CERTIFICATIONS  /  earned in training; they open demanding pads", S.Label);
+            Certification earned = Missions.EarnedCertifications;
+            foreach (Certification certification in Certifications.All)
+                GUILayout.Label(((earned & certification) != 0 ? "EARNED      " : "TO EARN    ") + Certifications.Requirement(certification), S.Small);
+            GUILayout.Space(6);
+            GUILayout.Label("ROUTE BESTS", S.Label);
+            if (record.RouteBests.Count == 0) GUILayout.Label("No deliveries yet.", S.Small);
+            foreach (RouteRecord route in record.RouteBests)
+                GUILayout.Label($"{route.Title}  ·  best {Clock(route.BestSeconds)}  ·  {route.BestGrade} {route.BestScore:0}  ·  flown {route.Completions}×", S.Small);
+            GUILayout.Space(6);
+            GUILayout.Label("DRILL BESTS", S.Label);
+            if (record.DrillBests.Count == 0) GUILayout.Label("No drills completed yet.", S.Small);
+            foreach (DrillRecord drill in record.DrillBests)
+                GUILayout.Label($"{TrainingSession.Names[drill.Drill]}  ·  {drill.BestGrade} {drill.BestScore:0}  ·  {drill.Assists}  ·  {drill.Realism ?? "—"}", S.Small);
+            GUILayout.Space(6);
+            GUILayout.Label("RECENT", S.Label);
+            for (int i = record.Results.Count - 1, shown = 0; i >= 0 && shown < 6; i--, shown++)
+            {
+                ChallengeResult result = record.Results[i];
+                GUILayout.Label($"{result.Title}  ·  {result.Grade} {result.Score:0}  ·  {Clock(result.Seconds)}" + (result.Payout > 0 ? $"  ·  ${result.Payout}" : ""), S.Small);
+            }
+            GUILayout.Space(8);
+            GUILayout.Label("LIVERIES  /  paint only, bought with earnings", S.Label);
+            for (int i = 0; i < Liveries.All.Length; i++)
+            {
+                Livery livery = Liveries.All[i];
+                bool owned = record.OwnsLivery(i), flying = record.SelectedLivery == i;
+                string label = flying ? $"●  {livery.Name}  ·  flying" : owned ? $"    {livery.Name}  ·  select" : $"    {livery.Name}  ·  buy for ${livery.Price}";
+                GUI.enabled = owned || record.Balance >= livery.Price;
+                if (Button(label) && !flying)
+                {
+                    if (owned || record.BuyLivery(i, livery.Price))
+                    {
+                        record.SelectLivery(i);
+                        Missions.SaveNow();
+                        hud.ApplyLivery();
+                    }
+                }
+                GUI.enabled = true;
+            }
+        }
+
+        private static string Count(int value, string one, string many) => $"{value} {(value == 1 ? one : many)}";
+
+        private static string FlightTime(float seconds)
+        {
+            int minutes = Mathf.FloorToInt(Mathf.Max(0f, seconds) / 60f);
+            return $"{minutes / 60}:{minutes % 60:00} h";
+        }
+
+        private static string Clock(float seconds) => seconds <= 0f || seconds >= float.MaxValue / 2 ? "—"
+            : $"{Mathf.FloorToInt(seconds / 60f)}:{Mathf.FloorToInt(seconds % 60f):00}";
 
         private void ControlsPage()
         {

@@ -40,7 +40,7 @@ namespace HoverForHire
                 margin = new RectOffset(3, 3, 4, 4), border = new RectOffset(), fixedHeight = 44
             };
             SetControlColors(Button, buttonIdle, buttonHover, buttonActive);
-            TabButton = new GUIStyle(Button) { alignment = TextAnchor.MiddleCenter, fixedHeight = 43, fontSize = 14 };
+            TabButton = new GUIStyle(Button) { alignment = TextAnchor.MiddleCenter, fixedHeight = 43, fontSize = 14, padding = new RectOffset(6, 6, 10, 10) };
             Toggle = new GUIStyle(Button) { fontSize = 14, fixedHeight = 36 };
             SetControlColors(Toggle, toggleOff, buttonHover, toggleOn);
             SliderTrack = new GUIStyle(GUI.skin.horizontalSlider)

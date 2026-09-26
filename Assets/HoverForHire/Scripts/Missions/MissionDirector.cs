@@ -227,6 +227,8 @@ namespace HoverForHire
                 TorqueFraction = Aircraft.TorqueFraction, VortexRing = Aircraft.VortexRingSeverity, EngineFailed = Aircraft.EngineFailed
             };
             string assists = ActiveAssists();
+            // Logbook: airborne time in every mode.
+            if (Progression != null && !Aircraft.Grounded && !Aircraft.Crashed) Progression.FlightSeconds += deltaSeconds;
             if (Mode == GameMode.Training && CurrentTraining != null)
             {
                 CurrentTraining.RecordAssists(assists);
@@ -450,6 +452,19 @@ namespace HoverForHire
         {
             CurrentMission?.RecordTouchdown(speed);
             CurrentTraining?.RecordTouchdown(speed);
+            // Logbook: a touchdown below the hard-landing limit is a landing.
+            if (Progression != null && Aircraft != null && !Aircraft.Crashed && Aircraft.Tuning != null && speed < Aircraft.Tuning.CrashVerticalSpeed)
+            {
+                Progression.Landings++;
+                savePending = true;
+            }
+        }
+
+        /// <summary>Save pending logbook and livery changes now (the Flight Desk calls this after purchases).</summary>
+        public void SaveNow()
+        {
+            savePending = true;
+            SaveProgression();
         }
 
         private void OnExternalReset()

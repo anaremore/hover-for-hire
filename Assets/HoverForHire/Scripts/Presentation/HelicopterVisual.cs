@@ -78,6 +78,21 @@ namespace HoverForHire
             AddBox(new Vector3(0, 1.23f, -5.02f), new Vector3(.14f, 1.76f, .66f));    // Vertical fin.
         }
 
+        /// <summary>Repaint the airframe enamel. Shared materials change in place, so every panel follows.</summary>
+        public void ApplyLivery(Livery livery)
+        {
+            foreach (Material material in ownedMaterials)
+            {
+                if (material == null) continue;
+                Color? color = material.name.Contains("OrangeEnamel") ? livery.Primary
+                    : material.name.Contains("CreamEnamel") ? livery.Secondary
+                    : material.name.Contains("CautionYellow") ? livery.Accent : (Color?)null;
+                if (!color.HasValue) continue;
+                material.SetColor("_BaseColor", color.Value);
+                material.SetColor("_Color", color.Value);
+            }
+        }
+
         void AddBox(Vector3 center, Vector3 size)
         {
             var box = gameObject.AddComponent<BoxCollider>();

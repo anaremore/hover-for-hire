@@ -85,6 +85,8 @@ namespace HoverForHire
                     return null;
                 }
                 ProgressionData data = JsonUtility.FromJson<ProgressionData>(json);
+                // Older supported versions are brought up to date in memory; the next save writes the new version.
+                data?.Migrate();
                 if (data != null && data.IsValid) return data;
                 LastError = "Save was incomplete or used an unsupported version.";
             }

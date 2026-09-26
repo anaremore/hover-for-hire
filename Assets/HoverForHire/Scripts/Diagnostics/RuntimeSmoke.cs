@@ -105,16 +105,19 @@ namespace HoverForHire
             hud.SendMessage("TogglePause");
             yield return null;
             yield return Capture("05-menu.png");
-            hud.SelectMenuPage(1);
+            hud.SelectMenuPage(FlightDeskMenu.PageLogbook);
+            yield return null;
+            yield return Capture("05b-logbook.png");
+            hud.SelectMenuPage(FlightDeskMenu.PageControls);
             yield return null;
             yield return Capture("06-controls.png");
-            hud.SelectMenuPage(2);
+            hud.SelectMenuPage(FlightDeskMenu.PageBindings);
             yield return null;
             yield return Capture("07-bindings.png");
-            hud.SelectMenuPage(3);
+            hud.SelectMenuPage(FlightDeskMenu.PageAssists);
             yield return null;
             yield return Capture("08-assists-camera.png");
-            hud.SelectMenuPage(4);
+            hud.SelectMenuPage(FlightDeskMenu.PageView);
             yield return null;
             yield return Capture("08a-view-sound.png");
             // Realism: the autorotation drill starts in flight and fails the engine; capture the brief and the warning stack.
@@ -145,10 +148,15 @@ namespace HoverForHire
             yield return new WaitForSeconds(1f);
             yield return Capture("08e-shift-offers.png");
             hud.TogglePause();
-            hud.SelectMenuPage(0);
+            hud.SelectMenuPage(FlightDeskMenu.PageFly);
             yield return null;
             yield return Capture("08f-offer-board.png");
             hud.TogglePause();
+            // A purchasable livery on the pad, then back to the pilot's own paint.
+            game.Aircraft.GetComponent<HelicopterVisual>().ApplyLivery(Liveries.All[1]);
+            yield return null;
+            yield return Capture("08g-livery-coastguard.png");
+            hud.ApplyLivery();
             game.Missions.StartFreeFlight();
             Command = PilotCommand.Neutral;
             yield return new WaitForSeconds(1.5f);

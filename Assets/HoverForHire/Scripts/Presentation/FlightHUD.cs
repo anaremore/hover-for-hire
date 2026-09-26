@@ -55,6 +55,7 @@ namespace HoverForHire
             Aircraft.SystemFailed += OnSystemFailure;
             Missions.FeedbackEvent += MissionFeedback;
             Missions.StartFreeFlight();
+            ApplyLivery();
             if (firstRun) OpenWelcome();
         }
 
@@ -118,6 +119,13 @@ namespace HoverForHire
             Settings.Volume = Audio.Volume;
             PilotSettingsStore.Save(storage, Settings);
             Input.SaveSettings();
+        }
+
+        /// <summary>Paint the aircraft in the pilot's selected livery.</summary>
+        public void ApplyLivery()
+        {
+            var visual = Aircraft != null ? Aircraft.GetComponent<HelicopterVisual>() : null;
+            if (visual != null && Missions.Progression != null) visual.ApplyLivery(Liveries.Get(Missions.Progression.SelectedLivery));
         }
 
         /// <summary>Switch display units; objectives already shown keep theirs until the next drill or job.</summary>
