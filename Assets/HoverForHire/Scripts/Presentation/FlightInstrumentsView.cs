@@ -1,3 +1,4 @@
+using Unity.Profiling;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -11,12 +12,19 @@ namespace HoverForHire
     public sealed class FlightInstrumentsView
     {
         private const float TapeCenterY = 330f, TapeHalf = 94f, TapeOffset = 400f, ClusterY = 612f;
+        // Profiler markers per instrument group; RuntimeBenchmark reports them in development builds.
+        internal static readonly string[] MarkerNames =
+            { "HUD.Mission", "HUD.Compass", "HUD.JobAndWind", "HUD.Flight", "HUD.Cyclic", "HUD.Status", "HUD.HoverOrMap", "HUD.Target", "HUD.Footer" };
+        private static readonly ProfilerMarker[] Markers = System.Array.ConvertAll(MarkerNames, name => new ProfilerMarker(name));
+        private static readonly float[] BankMarks = { -45f, -30f, -20f, -10f, 0f, 10f, 20f, 30f, 45f };
         private static readonly Color Green = new Color(.45f, .95f, .55f);
         private static readonly Color Red = new Color(1f, .3f, .24f);
         private static readonly Color Faint = new Color(.8f, .94f, .7f, .22f);
 
         private readonly FlightHUD hud;
         private readonly GUIContent objectiveMeasure = new GUIContent(), statusMeasure = new GUIContent();
+        private string measuredObjective, measuredStatus;
+        private float objectiveHeight, statusHeight;
         private Texture2D mapTexture;
 
         public FlightInstrumentsView(FlightHUD hud) { this.hud = hud; }
@@ -30,19 +38,32 @@ namespace HoverForHire
         public void Draw()
         {
             if (mapTexture == null) mapTexture = BuildMapTexture();
-            DrawMission();
-            DrawCompass();
-            DrawJobInfo();
-            DrawWind();
-            if (M.Cockpit) DrawCockpitColumn();
-            else DrawChaseInstruments();
-            DrawCyclicIndicator();
-            DrawAircraftStatus();
-            if (M.HoverVisible) DrawHoverDisplay();
-            else DrawMap();
-            DrawTarget();
-            S.Text(new Rect(26, 690, 960, 20), M.FooterHint, S.HudSmall, FlightHudGraphics.Muted);
-            float stackBottom = DrawWarnings();
+            using (Markers[0].Auto()) DrawMission();
+            using (Markers[1].Auto()) DrawCompass();
+            using (Markers[2].Auto())
+            {
+                DrawJobInfo();
+                DrawWind();
+            }
+            using (Markers[3].Auto())
+            {
+                if (M.Cockpit) DrawCockpitColumn();
+                else DrawChaseInstruments();
+            }
+            using (Markers[4].Auto()) DrawCyclicIndicator();
+            using (Markers[5].Auto()) DrawAircraftStatus();
+            using (Markers[6].Auto())
+            {
+                if (M.HoverVisible) DrawHoverDisplay();
+                else DrawMap();
+            }
+            using (Markers[7].Auto()) DrawTarget();
+            float stackBottom;
+            using (Markers[8].Auto())
+            {
+                S.Text(new Rect(26, 690, 960, 20), M.FooterHint, S.HudSmall, FlightHudGraphics.Muted);
+                stackBottom = DrawWarnings();
+            }
             if (hud.NoticeVisible)
             {
                 var r = new Rect(Width / 2 - 257, stackBottom + 4, 514, 46);
@@ -64,15 +85,21 @@ namespace HoverForHire
         private void DrawMission()
         {
             // The panel grows with the wrapped objective, so long drill briefs never run into the status line.
-            objectiveMeasure.text = M.Objective;
-            statusMeasure.text = M.Status;
-            float objective = Mathf.Max(24, S.Label.CalcHeight(objectiveMeasure, 316));
+            if (!ReferenceEquals(measuredObjective, M.Objective) || !ReferenceEquals(measuredStatus, M.Status))
+            {
+                measuredObjective = M.Objective;
+                measuredStatus = M.Status;
+                objectiveMeasure.text = M.Objective;
+                statusMeasure.text = M.Status;
+                objectiveHeight = Mathf.Max(24, S.Label.CalcHeight(objectiveMeasure, 316));
+                statusHeight = M.Status.Length > 0 ? Mathf.Max(20, S.Small.CalcHeight(statusMeasure, 316)) : 0;
+            }
+            float objective = objectiveHeight;
             bool status = M.Status.Length > 0;
-            float statusHeight = status ? Mathf.Max(20, S.Small.CalcHeight(statusMeasure, 316)) : 0;
             float height = 39 + objective + (status ? statusHeight + 8 : 10);
             S.Box(new Rect(26, 26, 348, height), .61f);
             FlightHudGraphics.Fill(new Rect(26, 26, 3, height), FlightHudGraphics.Amber);
-            S.Text(new Rect(42, 36, 316, 20), M.ModeHeader, S.HudSmall, FlightHudGraphics.Amber);
+            S.Plain(new Rect(42, 36, 316, 20), M.ModeHeader, S.HudSmall, FlightHudGraphics.Amber);
             GUI.Label(new Rect(42, 62, 316, objective), M.Objective, S.Label);
             if (status) GUI.Label(new Rect(42, 64 + objective, 316, statusHeight), M.Status, S.Small);
         }
@@ -97,7 +124,7 @@ namespace HoverForHire
             FlightHudGraphics.Line(new Vector2(cx - 5, 82), new Vector2(cx, 77), FlightHudGraphics.Paper, 1.6f);
             FlightHudGraphics.Line(new Vector2(cx, 77), new Vector2(cx + 5, 82), FlightHudGraphics.Paper, 1.6f);
             S.Box(new Rect(cx - 35, 88, 70, 27), .48f);
-            S.Text(new Rect(cx - 35, 87, 70, 27), M.HeadingText, S.HudCenter, FlightHudGraphics.Paper);
+            S.Plain(new Rect(cx - 35, 87, 70, 27), M.HeadingText, S.HudCenter, FlightHudGraphics.Paper);
             if (M.RecordingText.Length > 0) S.Text(new Rect(cx - 70, 118, 140, 22), M.RecordingText, S.HudCenter, Red);
         }
 
@@ -124,7 +151,7 @@ namespace HoverForHire
             if (!M.WindVisible) return;
             var center = new Vector2(Width - 50, M.Cockpit ? 150 : 162);
             const float radius = 18;
-            FlightHudGraphics.Circle(center, radius, FlightHudGraphics.Muted, 28);
+            FlightHudGraphics.Circle(center, radius, FlightHudGraphics.Muted);
             FlightHudGraphics.Line(center + Vector2.up * -radius, center + Vector2.up * (-radius - 5), FlightHudGraphics.Paper);
             float angle = M.WindFromRelative * Mathf.Deg2Rad;
             var from = new Vector2(Mathf.Sin(angle), -Mathf.Cos(angle));
@@ -177,7 +204,7 @@ namespace HoverForHire
             var readout = new Rect(left ? x - 100 : x + 6, cy - 21, 94, 43);
             S.Box(readout, .67f);
             FlightHudGraphics.Frame(readout, FlightHudGraphics.Phosphor);
-            S.Text(readout, readoutText, S.HudValueCenter, FlightHudGraphics.Paper);
+            S.Plain(readout, readoutText, S.HudValueCenter, FlightHudGraphics.Paper);
             FlightHudGraphics.Line(new Vector2(x + (left ? -6 : 6), cy - 5), new Vector2(x, cy), FlightHudGraphics.Phosphor);
             FlightHudGraphics.Line(new Vector2(x, cy), new Vector2(x + (left ? -6 : 6), cy + 5), FlightHudGraphics.Phosphor);
         }
@@ -191,9 +218,9 @@ namespace HoverForHire
             float roll = Mathf.Atan2(right.y, up.y) * Mathf.Rad2Deg;
             const float pixelsPerDegree = 1.6f;
             S.Box(new Rect(center.x - radius - 4, center.y - radius - 4, radius * 2 + 8, radius * 2 + 8), .45f);
-            FlightHudGraphics.Circle(center, radius, FlightHudGraphics.Muted, 40);
+            FlightHudGraphics.Circle(center, radius, FlightHudGraphics.Muted);
             // Fixed bank scale at the top: 0, 10, 20, 30 and 45 degrees each side.
-            foreach (float bank in new[] { -45f, -30f, -20f, -10f, 0f, 10f, 20f, 30f, 45f })
+            foreach (float bank in BankMarks)
             {
                 float a = bank * Mathf.Deg2Rad;
                 var direction = new Vector2(Mathf.Sin(a), -Mathf.Cos(a));
@@ -282,7 +309,7 @@ namespace HoverForHire
             FlightHudGraphics.Line(center + Vector2.left * 28, center + Vector2.right * 28, new Color(.8f, .9f, .7f, .32f));
             FlightHudGraphics.Line(center + Vector2.up * 28, center + Vector2.down * 28, new Color(.8f, .9f, .7f, .32f));
             Vector2 c = input.Command.Cyclic;
-            FlightHudGraphics.Circle(center + new Vector2(c.x, -c.y) * 21, 3, FlightHudGraphics.Amber, 12, 2);
+            FlightHudGraphics.Circle(center + new Vector2(c.x, -c.y) * 21, 3, FlightHudGraphics.Amber, 2);
             S.Text(new Rect(center.x - 49, center.y + 30, 98, 21), input.IsFreeLooking ? "FREE LOOK" : "CYCLIC", S.HudCenter, FlightHudGraphics.Muted);
         }
 
@@ -293,10 +320,10 @@ namespace HoverForHire
             if (M.Cockpit) return;
             S.Box(new Rect(26, 554, 266, 123), .58f);
             FlightHudGraphics.Fill(new Rect(26, 554, 266, 1), new Color(.8f, .94f, .7f, .45f));
-            S.Text(new Rect(39, 566, 242, 22), M.StatusTitle, S.HudSmall, Aircraft.Crashed ? FlightHudGraphics.Amber : FlightHudGraphics.Paper);
-            S.Text(new Rect(39, 597, 240, 22), M.RotorLine, S.HudSmall, M.RotorCaution ? FlightHudGraphics.Amber : FlightHudGraphics.Phosphor);
-            S.Text(new Rect(39, 625, 242, 20), M.AssistsLine, S.HudSmall, FlightHudGraphics.Muted);
-            S.Text(new Rect(39, 651, 242, 20), M.ContextLine, S.HudSmall, FlightHudGraphics.Muted);
+            S.Plain(new Rect(39, 566, 242, 22), M.StatusTitle, S.HudSmall, Aircraft.Crashed ? FlightHudGraphics.Amber : FlightHudGraphics.Paper);
+            S.Plain(new Rect(39, 597, 240, 22), M.RotorLine, S.HudSmall, M.RotorCaution ? FlightHudGraphics.Amber : FlightHudGraphics.Phosphor);
+            S.Plain(new Rect(39, 625, 242, 20), M.AssistsLine, S.HudSmall, FlightHudGraphics.Muted);
+            S.Plain(new Rect(39, 651, 242, 20), M.ContextLine, S.HudSmall, FlightHudGraphics.Muted);
         }
 
         private Rect ChartFrame => new Rect(Width - 246, 429, 220, 248);
@@ -308,19 +335,11 @@ namespace HoverForHire
             Rect frame = ChartFrame;
             S.Box(frame, .79f);
             var r = new Rect(frame.x + 9, frame.y + 31, 202, 202);
+            // Terrain, grid and roads are baked into the chart texture once; only moving marks are drawn per frame.
             GUI.DrawTexture(r, mapTexture);
-            var grid = new Color(.79f, .92f, .69f, .10f);
-            for (int i = 1; i < 4; i++)
-            {
-                FlightHudGraphics.Fill(new Rect(r.x + i * r.width / 4, r.y, 1, r.height), grid);
-                FlightHudGraphics.Fill(new Rect(r.x, r.y + i * r.height / 4, r.width, 1), grid);
-            }
             FlightHudGraphics.Frame(frame, new Color(.8f, .94f, .7f, .42f));
-            S.Text(new Rect(frame.x + 11, frame.y + 6, 180, 22), "MERIDIAN  /  NAV", S.HudSmall);
-            S.Text(new Rect(frame.x + 189, frame.y + 6, 23, 22), "N ↑", S.HudSmall, FlightHudGraphics.Paper);
-            foreach (Vector2[] road in IslandWorld.Roads)
-                for (int i = 1; i < road.Length; i++)
-                    MapRoad(r, new Vector3(road[i - 1].x, 0, road[i - 1].y), new Vector3(road[i].x, 0, road[i].y));
+            S.Plain(new Rect(frame.x + 11, frame.y + 6, 180, 22), "MERIDIAN  /  NAV", S.HudSmall);
+            S.Plain(new Rect(frame.x + 189, frame.y + 6, 23, 22), "N ↑", S.HudSmall, FlightHudGraphics.Paper);
             Vector2 here = MapPosition(r, Aircraft.transform.position);
             if (Missions.TargetZone != null)
             {
@@ -339,12 +358,12 @@ namespace HoverForHire
                 Color color = zone == Missions.TargetZone ? FlightHudGraphics.Amber : FlightHudGraphics.Phosphor;
                 if (zone == Missions.TargetZone) FlightHudGraphics.Diamond(p, 7, color);
                 else FlightHudGraphics.Frame(new Rect(p.x - 2, p.y - 2, 4, 4), color);
-                S.Text(new Rect(p.x + 5, p.y - 12, 23, 19), HudModel.PadNumber(i + 1), S.HudSmall, color);
+                S.Plain(new Rect(p.x + 5, p.y - 12, 23, 19), HudModel.PadNumber(i + 1), S.HudSmall, color);
             }
-            FlightHudGraphics.Circle(here, 12, new Color(.94f, .96f, .89f, .30f), 28);
+            FlightHudGraphics.Circle(here, 12, new Color(.94f, .96f, .89f, .30f));
             FlightHudGraphics.Aircraft(here, Aircraft.Heading, FlightHudGraphics.Paper, .85f);
             FlightHudGraphics.Fill(new Rect(r.x + 8, r.yMax - 12, r.width * 500 / ChartExtent, 2), FlightHudGraphics.Muted);
-            S.Text(new Rect(r.x + 8, r.yMax - 34, 70, 20), M.Units == UnitSystem.Aviation ? "0.27 nm" : "500 m", S.HudSmall, FlightHudGraphics.Muted);
+            S.Plain(new Rect(r.x + 8, r.yMax - 34, 70, 20), M.Units == UnitSystem.Aviation ? "0.27 nm" : "500 m", S.HudSmall, FlightHudGraphics.Muted);
         }
 
         /// <summary>
@@ -356,16 +375,16 @@ namespace HoverForHire
             Rect frame = ChartFrame;
             S.Box(frame, .82f);
             FlightHudGraphics.Frame(frame, new Color(.8f, .94f, .7f, .42f));
-            S.Text(new Rect(frame.x + 11, frame.y + 6, 120, 22), M.HoverHoldEngaged ? "HOVER HOLD" : "HOVER  /  DRIFT", S.HudSmall,
+            S.Plain(new Rect(frame.x + 11, frame.y + 6, 120, 22), M.HoverHoldEngaged ? "HOVER HOLD" : "HOVER  /  DRIFT", S.HudSmall,
                 M.HoverHoldEngaged ? Green : FlightHudGraphics.Phosphor);
-            S.Text(new Rect(frame.x + 110, frame.y + 6, 100, 22), M.ServiceReady ? "STEADY" : "", S.HudRight, Green);
+            S.Plain(new Rect(frame.x + 110, frame.y + 6, 100, 22), M.ServiceReady ? "STEADY" : "", S.HudRight, Green);
             var center = new Vector2(frame.center.x, frame.y + 128);
             const float half = 92, pixelsPerMetrePerSecond = half / 3f;
             FlightHudGraphics.Line(center + Vector2.left * half, center + Vector2.right * half, Faint);
             FlightHudGraphics.Line(center + Vector2.up * -half, center + Vector2.up * half, Faint);
-            FlightHudGraphics.Circle(center, pixelsPerMetrePerSecond, Faint, 32);
-            FlightHudGraphics.Circle(center, 2 * pixelsPerMetrePerSecond, Faint, 40);
-            FlightHudGraphics.Circle(center, Mathf.Max(4f, M.ServiceSpeed * pixelsPerMetrePerSecond), M.ServiceReady ? Green : FlightHudGraphics.Muted, 32, 1.6f);
+            FlightHudGraphics.Circle(center, pixelsPerMetrePerSecond, Faint);
+            FlightHudGraphics.Circle(center, 2 * pixelsPerMetrePerSecond, Faint);
+            FlightHudGraphics.Circle(center, Mathf.Max(4f, M.ServiceSpeed * pixelsPerMetrePerSecond), M.ServiceReady ? Green : FlightHudGraphics.Muted, 1.6f);
             if (M.PadVisible)
             {
                 float distance = M.PadOffset.magnitude;
@@ -384,10 +403,10 @@ namespace HoverForHire
                 FlightHudGraphics.Line(center + drift, center + drift - unit * 7 + side * 4, FlightHudGraphics.Paper, 2f);
                 FlightHudGraphics.Line(center + drift, center + drift - unit * 7 - side * 4, FlightHudGraphics.Paper, 2f);
             }
-            FlightHudGraphics.Circle(center + trend, 4, FlightHudGraphics.Phosphor, 16, 1.6f);
+            FlightHudGraphics.Circle(center + trend, 4, FlightHudGraphics.Phosphor, 1.6f);
             FlightHudGraphics.Aircraft(center, 0f, FlightHudGraphics.Paper, .85f);
-            S.Text(new Rect(frame.x + 11, frame.yMax - 26, 120, 20), M.DriftText, S.HudSmall, M.ServiceReady ? Green : FlightHudGraphics.Phosphor);
-            S.Text(new Rect(frame.x + 110, frame.yMax - 26, 100, 20), M.PadText, S.HudRight, FlightHudGraphics.Amber);
+            S.Plain(new Rect(frame.x + 11, frame.yMax - 26, 120, 20), M.DriftText, S.HudSmall, M.ServiceReady ? Green : FlightHudGraphics.Phosphor);
+            S.Plain(new Rect(frame.x + 110, frame.yMax - 26, 100, 20), M.PadText, S.HudRight, FlightHudGraphics.Amber);
         }
 
         private static Vector2 Clamp(Vector2 value, float radius) => Vector2.ClampMagnitude(value, radius);
@@ -396,14 +415,73 @@ namespace HoverForHire
             => new Vector2(Mathf.Clamp(rect.center.x + position.x / ChartExtent * rect.width, rect.x + 9, rect.xMax - 9),
                 Mathf.Clamp(rect.center.y - position.z / ChartExtent * rect.height, rect.y + 9, rect.yMax - 9));
 
-        private static void MapRoad(Rect rect, Vector3 from, Vector3 to)
-            => FlightHudGraphics.Line(MapPosition(rect, from), MapPosition(rect, to), new Color(.80f, .84f, .67f, .35f), 1.5f);
-
+        /// <summary>
+        /// The chart: shaded terrain sampled at 256 texels, enlarged to 512 so the baked grid and roads stay crisp at
+        /// high resolutions. Roads keep their 1.5-point width on the 202-point chart.
+        /// </summary>
         private static Texture2D BuildMapTexture()
         {
-            const int size = 256;
+            Color[] terrain = BuildTerrainChart(256);
+            const int size = 512;
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                    pixels[y * size + x] = SampleChart(terrain, 256, x / (float)(size - 1), y / (float)(size - 1));
+            var grid = new Color(.79f, .92f, .69f, .10f);
+            float texelsPerPoint = size / 202f;
+            for (int i = 1; i < 4; i++)
+            {
+                float line = i * (size - 1) / 4f;
+                Stroke(pixels, size, new Vector2(line, 0), new Vector2(line, size - 1), texelsPerPoint, grid);
+                Stroke(pixels, size, new Vector2(0, line), new Vector2(size - 1, line), texelsPerPoint, grid);
+            }
+            var road = new Color(.80f, .84f, .67f, .35f);
+            foreach (Vector2[] points in IslandWorld.Roads)
+                for (int i = 1; i < points.Length; i++)
+                    Stroke(pixels, size, ChartTexel(points[i - 1], size), ChartTexel(points[i], size), 1.5f * texelsPerPoint, road);
             var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
                 { name = "Meridian navigation chart", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
+            texture.SetPixels(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        private static Vector2 ChartTexel(Vector2 world, int size)
+            => new Vector2((world.x / ChartExtent + .5f) * (size - 1), (world.y / ChartExtent + .5f) * (size - 1));
+
+        private static Color SampleChart(Color[] chart, int size, float u, float v)
+        {
+            float fx = u * (size - 1), fy = v * (size - 1);
+            int x0 = Mathf.Min((int)fx, size - 2), y0 = Mathf.Min((int)fy, size - 2);
+            float tx = fx - x0, ty = fy - y0;
+            Color bottom = Color.Lerp(chart[y0 * size + x0], chart[y0 * size + x0 + 1], tx);
+            Color top = Color.Lerp(chart[(y0 + 1) * size + x0], chart[(y0 + 1) * size + x0 + 1], tx);
+            return Color.Lerp(bottom, top, ty);
+        }
+
+        /// <summary>Blends an antialiased line of the given width (in texels) into the chart.</summary>
+        private static void Stroke(Color[] pixels, int size, Vector2 from, Vector2 to, float width, Color color)
+        {
+            float half = width * .5f;
+            int minX = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(from.x, to.x) - half - 1)), maxX = Mathf.Min(size - 1, Mathf.CeilToInt(Mathf.Max(from.x, to.x) + half + 1));
+            int minY = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(from.y, to.y) - half - 1)), maxY = Mathf.Min(size - 1, Mathf.CeilToInt(Mathf.Max(from.y, to.y) + half + 1));
+            Vector2 segment = to - from;
+            float length = Mathf.Max(1e-4f, segment.sqrMagnitude);
+            for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    var p = new Vector2(x, y);
+                    float t = Mathf.Clamp01(Vector2.Dot(p - from, segment) / length);
+                    float coverage = Mathf.Clamp01(half + .5f - Vector2.Distance(p, from + segment * t));
+                    if (coverage <= 0f) continue;
+                    int index = y * size + x;
+                    Color under = pixels[index];
+                    pixels[index] = Color.Lerp(under, new Color(color.r, color.g, color.b, 1f), color.a * coverage);
+                }
+        }
+
+        private static Color[] BuildTerrainChart(int size)
+        {
             var pixels = new Color[size * size];
             for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++)
@@ -419,9 +497,7 @@ namespace HoverForHire
                 else if (Mathf.FloorToInt(height / 25) != Mathf.FloorToInt(IslandWorld.Height(wx + 9, wz) / 25)) land *= .74f;
                 pixels[y * size + x] = land;
             }
-            texture.SetPixels(pixels);
-            texture.Apply();
-            return texture;
+            return pixels;
         }
 
         // ---- Target, warnings, crash, debug ----

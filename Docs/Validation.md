@@ -1,6 +1,64 @@
 # Validation and playtest checklist
 
-Status snapshot: **26 September 2026, Unity 6000.3.22f1** (phase 5 of the 0.3 overhaul; the 0.2.0 and 0.1.0 sections below are kept as the baseline). The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
+Status snapshot: **26 September 2026, Unity 6000.3.22f1** (phase 6 of the 0.3 overhaul; the 0.2.0 and 0.1.0 sections below are kept as the baseline). The project builds and runs on the available Windows host. Automated flight, camera and mission checks provide evidence of working behavior; a human has not yet judged whether the helicopter feels satisfying or whether the training transfers usefully to other games.
+
+## Performance and release builds (0.3 development, phase 6)
+
+**26 September 2026.**
+
+**Measure first.** A new opt-in benchmark measures the game with the frame rate uncapped, in either player:
+- **How it runs:** `Tools/Benchmark.ps1` (`RuntimeBenchmark`).
+- **What it covers:** a view from the home pad, the town from 60 m in chase and cockpit views, and a low pass across the island at 60 m/s.
+- **What it reports:** average and 1%-low frame rates, and CPU (main and render thread) and GPU frame times from `FrameTimingManager`. The development player also reports managed garbage per frame and the HUD's cost by instrument, using profiler markers.
+
+All figures below come from 1920×1080 windowed, on an RTX 3080 (Direct3D 12) with a Ryzen 9 5900X.
+
+**What costs what.** The baseline was measured with each part removed in turn (development player, town view):
+
+| Removed | Main thread | Render thread | GPU | Garbage |
+| --- | --- | --- | --- | --- |
+| Nothing (baseline) | 3.30 ms | 2.24 ms | 1.50 ms | 13.8 KB/frame |
+| Flight HUD | 1.16 ms | 0.95 ms | 1.51 ms | 0 |
+| Shadows | 3.17 ms | 2.17 ms | 1.18 ms | 13.8 KB |
+| Vegetation | 3.11 ms | 2.15 ms | 1.10 ms | 13.8 KB |
+| Post-processing | 3.09 ms | 2.14 ms | 1.30 ms | 13.8 KB |
+| MSAA | 3.24 ms | 2.20 ms | 1.33 ms | 13.8 KB |
+
+The immediate-mode (IMGUI) flight HUD was two-thirds of the main thread's work, over half of the render thread's, and the source of all per-frame garbage. Its profiler markers showed where:
+- **Chart:** 0.6 ms. It redrew every road as hundreds of rotated line quads.
+- **Tapes and cluster:** 0.6 ms.
+- **Compass:** 0.3 ms.
+- **Cyclic indicator:** 0.25 ms. Its two small circles were drawn as 52 line segments.
+- **Readouts:** every one was formatted every frame. The key hints looked up seven bindings, and the realism summary built three settings objects to find its preset.
+
+**HUD changes.**
+- **Drawing on repaint only.** In flight IMGUI skips its layout pass and input events. The Flight Desk and the crash panel's Retry button still get every event.
+- **Baked chart.** The chart's roads and grid are baked into its texture (512 texels).
+- **Circles.** Each circle is one cached antialiased ring texture.
+- **Straight lines.** Horizontal and vertical marks skip the rotated matrix.
+- **Text on dark panels** drops its invisible shadow copy.
+- **Cached readouts.** Readouts are formatted from keys (the value as shown) and rebuilt only when that changes. `ReadoutFormatTests` checks that keyed text reads exactly as the direct formats did.
+- **Slower-changing text.** Key hints refresh only when the device or mode changes (and every 2 s). Mission text refreshes at 10 Hz.
+
+**Results.**
+
+| Player, view | Average fps | 1% low | Main thread | Render thread | GPU | Garbage |
+| --- | --- | --- | --- | --- | --- | --- |
+| Development, before, town | 299 | 149 | 3.30 ms | 2.24 ms | 1.50 ms | 13.8 KB/frame |
+| Development, after, town | 451 | 294 | 1.93 ms | 1.26 ms | 1.53 ms | 6.0 KB/frame |
+| Development, before, low pass | 312 | 162 | 3.17 ms | 2.17 ms | 1.31 ms | 14.1 KB/frame |
+| Development, after, low pass | 490 | 194 | 1.84 ms | 1.17 ms | 1.21 ms | 6.1 KB/frame |
+| **Release, after, town** | **504** | **335** | **1.51 ms** | **1.07 ms** | 1.55 ms | not measured |
+| **Release, after, low pass** | **568** | **275** | **1.40 ms** | **0.97 ms** | 1.24 ms | not measured |
+
+The HUD now costs 0.7 ms in chase view and 0.5 ms in the cockpit, down from 1.9 and 1.35 ms. The remaining 6 KB/frame of garbage comes from Unity 6's IMGUI text drawing itself, about 70 bytes per label. Skipping HUD text in a test run removed it; turning off rich text did not. It now means one incremental collection every second or two at 60 fps.
+
+**Release and development builds.**
+- **Release by default.** Builds are release builds.
+- **Development variant.** `Tools/Unity.ps1 WindowsDev` builds `Builds/Windows-Development`, which `Tools/Smoke.ps1` runs.
+- **Diagnostics.** The smoke flight, its autopilot and its audio capture compile only into development builds and the editor. The benchmark and the flight recorder stay in release builds: both are opt-in, and useful for player reports and playtests.
+- **Version.** 0.3.0 has one source (`ProjectSetup.Version`) and shows in the Flight Desk header.
+- **Build record.** Each build records its version, commit and development flag in `build-info.json`. `Tools/package_builds.py` names archives by version and refuses development builds or builds of another commit.
 
 ## Loop, progression, cockpit and beginner aids (0.3 development, phase 5)
 

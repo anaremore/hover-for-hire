@@ -81,9 +81,11 @@ All bindings are editable from the flight desk. Mouse displacement is integrated
 
 ## Build and test
 
-Use **Hover for Hire → Build → Windows / macOS / Linux**. Development builds are written to `Builds/<platform>`. The verified builds are Windows x64, macOS universal (Intel + Apple silicon), and Linux x64. The macOS and Linux players have compiled on Windows but still need native launch/controller/audio testing. macOS distribution signing/notarization remains a release task.
+Use **Hover for Hire → Build → Windows / macOS / Linux** for release builds, written to `Builds/<platform>`. **Windows (development)** writes `Builds/Windows-Development`: a development player that adds the automated smoke flight, its autopilot and audio capture, and profiler support. The version (0.3.0) is set in one place, `ProjectSetup.Version`, and appears in the Flight Desk header.
 
-Ready-to-extract archives are generated locally as `Builds/Hover-for-Hire-Windows.zip`, `Builds/Hover-for-Hire-macOS.zip`, and `Builds/Hover-for-Hire-Linux.zip`. Run `python Tools/package_builds.py` after rebuilding to regenerate them and their SHA-256 files. It preserves executable modes for macOS/Linux. Keep each player's data folders beside its executable.
+The verified builds are Windows x64, macOS universal (Intel + Apple silicon), and Linux x64. The macOS and Linux players have compiled on Windows but still need native launch/controller/audio testing. macOS distribution signing/notarization remains a release task.
+
+Each build writes a `build-info.json` beside the player: version, commit, development flag, and whether the working tree had uncommitted changes. `python Tools/package_builds.py` zips the release players as `Builds/Hover-for-Hire-<version>-<platform>.zip`, each with a SHA-256 file. It refuses development builds and builds of another commit (`--allow-stale` overrides the commit check). It preserves executable modes for macOS/Linux. Keep each player's data folders beside its executable.
 
 Completed pushed updates ship these three archives and their SHA-256 checksums as versioned [GitHub releases](https://github.com/anaremore/hover-for-hire/releases). Builds stay out of source history. Release notes identify verification and native-platform limitations.
 
@@ -95,9 +97,20 @@ $env:UNITY_EDITOR = 'C:\Program Files\Unity\Hub\Editor\6000.3.22f1\Editor\Unity.
 .\Tools\Unity.ps1 EditMode
 .\Tools\Unity.ps1 PlayMode
 .\Tools\Unity.ps1 Windows
+.\Tools\Unity.ps1 WindowsDev
 .\Tools\Unity.ps1 macOS
 .\Tools\Unity.ps1 Linux
+.\Tools\Smoke.ps1 -Fps 30,60,144 -Art   # scripted flight and screenshots in the development player
+.\Tools\Benchmark.ps1                    # uncapped frame rates in the release player
 ```
+
+`Tools/Benchmark.ps1` runs the player with `-hover-benchmark <folder>`. With the frame rate uncapped, it measures:
+* fixed chase and cockpit views;
+* a low pass across the island at 60 m/s.
+
+It reports average and 1%-low frame rates, CPU and GPU frame times, and the world build at startup. Options:
+* `-Development` uses the development player, which also reports managed garbage per frame and the HUD's cost by instrument.
+* `-Without hud,shadows,vegetation,postfx,msaa` removes those parts first, to measure what each one costs.
 
 On macOS/Linux use the Unity executable with equivalent arguments:
 

@@ -1,4 +1,5 @@
 using System;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace HoverForHire
@@ -64,11 +65,18 @@ namespace HoverForHire
         {
             if (Model == null) return;
             menu.UpdateNavigation();
-            Model.Refresh();
+            using (ModelMarker.Auto()) Model.Refresh();
+            // In flight nothing on the HUD takes input, so IMGUI skips its layout pass and input events and draws on
+            // repaint only. The Flight Desk (GUILayout) and the crash panel's Retry button need every event.
+            useGUILayout = Paused || Aircraft.Crashed;
         }
+
+        internal static readonly ProfilerMarker ModelMarker = new ProfilerMarker("HUD.Model"), GuiMarker = new ProfilerMarker("HUD.OnGUI");
 
         private void OnGUI()
         {
+            if (!useGUILayout && Event.current.type != EventType.Repaint) return;
+            using var scope = GuiMarker.Auto();
             if (Game == null || Game.Aircraft == null || Model == null) return;
             Styles.Build();
             Matrix4x4 previous = GUI.matrix;
@@ -76,7 +84,7 @@ namespace HoverForHire
             Width = Screen.width / scale;
             GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
             instruments.Draw();
-            if (Paused) menu.Draw();
+            if (Paused && useGUILayout) menu.Draw();
             GUI.matrix = previous;
         }
 
@@ -254,6 +262,7 @@ namespace HoverForHire
             }
             instruments?.Dispose();
             Styles.Dispose();
+            FlightHudGraphics.ReleaseRings();
         }
     }
 }

@@ -91,6 +91,25 @@ namespace HoverForHire
             }
         }
 
+        /// <summary>
+        /// Changes whenever a field <see cref="Summary"/> depends on changes, so a display can keep the summary until
+        /// then: building it allocates. Every field is included, because the preset match compares them all.
+        /// </summary>
+        public long SummaryKey
+        {
+            get
+            {
+                unchecked
+                {
+                    long key = (GroundEffect ? 1 : 0) | (TranslationalLift ? 2 : 0) | (SpeedStability ? 4 : 0) | (VortexRingState ? 8 : 0)
+                        | (PowerLimits ? 16 : 0) | (TailRotorFailures ? 32 : 0) | ((long)Wind << 6) | ((long)EngineFailures << 9);
+                    key = key * 1000003 + BitConverter.SingleToInt32Bits(Gustiness);
+                    key = key * 1000003 + BitConverter.SingleToInt32Bits(VortexOnsetScale);
+                    return key * 1000003 + BitConverter.SingleToInt32Bits(RolloverLimitDegrees);
+                }
+            }
+        }
+
         public void Sanitize()
         {
             if (!Enum.IsDefined(typeof(WindStrength), Wind)) Wind = WindStrength.Calm;

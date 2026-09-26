@@ -73,6 +73,15 @@ namespace HoverForHire
             GUI.color = old;
         }
 
+        /// <summary>HUD text on a dark panel, where a shadow would not show.</summary>
+        public void Plain(Rect rect, string text, GUIStyle style, Color? tint = null)
+        {
+            Color previous = style.normal.textColor;
+            style.normal.textColor = tint ?? FlightHudGraphics.Phosphor;
+            GUI.Label(rect, text, style);
+            style.normal.textColor = previous;
+        }
+
         /// <summary>HUD text with a one-pixel shadow so it reads over bright scenery.</summary>
         public void Text(Rect rect, string text, GUIStyle style, Color? tint = null)
         {

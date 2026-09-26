@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace HoverForHire
@@ -30,6 +31,17 @@ namespace HoverForHire
         {
             Vector2 delta = to - from;
             if (delta.sqrMagnitude < .001f) return;
+            // Horizontal and vertical lines (tape and compass marks, crosshairs) need no rotated matrix.
+            if (Mathf.Abs(delta.y) < .001f)
+            {
+                Fill(new Rect(Mathf.Min(from.x, to.x), from.y - width * .5f, Mathf.Abs(delta.x), width), color);
+                return;
+            }
+            if (Mathf.Abs(delta.x) < .001f)
+            {
+                Fill(new Rect(from.x - width * .5f, Mathf.Min(from.y, to.y), width, Mathf.Abs(delta.y)), color);
+                return;
+            }
             Matrix4x4 previous = GUI.matrix;
             // Compose in logical HUD coordinates before the outer screen scale. Unity's
             // RotateAroundPivot unclips the pivot and can apply that scale a second time.
@@ -54,16 +66,52 @@ namespace HoverForHire
             Fill(new Rect(rect.xMax - width, rect.y, width, rect.height), color);
         }
 
-        internal static void Circle(Vector2 center, float radius, Color color, int segments = 40, float width = 1.2f)
+        // One cached, antialiased ring texture per radius and line width at the current screen scale: a circle is a
+        // single draw instead of dozens of rotated line segments.
+        private static readonly Dictionary<long, Texture2D> Rings = new Dictionary<long, Texture2D>();
+
+        internal static void Circle(Vector2 center, float radius, Color color, float width = 1.2f)
         {
-            Vector2 previous = center + Vector2.right * radius;
-            for (int i = 1; i <= segments; i++)
-            {
-                float angle = i * Mathf.PI * 2 / segments;
-                Vector2 point = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
-                Line(previous, point, color, width);
-                previous = point;
-            }
+            if (Event.current.type != EventType.Repaint) return;
+            Matrix4x4 matrix = GUI.matrix;
+            float scale = new Vector2(matrix.m00, matrix.m10).magnitude;
+            Texture2D ring = Ring(radius * scale, Mathf.Max(.5f, width * scale * .5f));
+            float size = ring.width / scale;
+            Color previous = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(new Rect(center.x - size * .5f, center.y - size * .5f, size, size), ring);
+            GUI.color = previous;
+        }
+
+        private static Texture2D Ring(float radiusPixels, float halfWidthPixels)
+        {
+            long key = ((long)Mathf.Round(radiusPixels * 4f) << 24) | (long)Mathf.Round(halfWidthPixels * 16f);
+            if (Rings.TryGetValue(key, out Texture2D ring) && ring != null) return ring;
+            // A resolution change leaves rings of the old size behind; start over rather than grow without bound.
+            if (Rings.Count >= 64) ReleaseRings();
+            int size = Mathf.CeilToInt((radiusPixels + halfWidthPixels + 1f) * 2f);
+            ring = new Texture2D(size, size, TextureFormat.RGBA32, false)
+                { name = "HUD ring", hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[size * size];
+            float middle = size * .5f;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x + .5f - middle, dy = y + .5f - middle;
+                    float coverage = Mathf.Clamp01(halfWidthPixels + .5f - Mathf.Abs(Mathf.Sqrt(dx * dx + dy * dy) - radiusPixels));
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)(coverage * 255f));
+                }
+            ring.SetPixels32(pixels);
+            ring.Apply(false, true);
+            Rings[key] = ring;
+            return ring;
+        }
+
+        internal static void ReleaseRings()
+        {
+            foreach (Texture2D ring in Rings.Values)
+                if (ring != null) Object.Destroy(ring);
+            Rings.Clear();
         }
 
         internal static void Diamond(Vector2 center, float radius, Color color)
